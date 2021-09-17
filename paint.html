@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" src="scripts/lib/jquery-3.2.1.min.js"></script>
+<script type="text/javascript" src="scripts/paint.js"></script>
+</head>
+<body>
+<div>
+<label>
+  <input type="checkbox" id="toggleBlackBG" checked="true"/>
+  Black Background
+</label>
+<label>
+  <input type="checkbox" id="toggleRed" checked="true"/>
+  R
+</label>
+<label>
+  <input type="checkbox" id="toggleGreen" checked="true"/>
+  G
+</label>
+<label>
+  <input type="checkbox"c id="toggleBlue" checked="true"/>
+  B
+</label>
+<select id="brush">
+<option value="line">Line</option>
+<option value="bezier">Bezier Curve</option>
+<option value="circle">Circles</option>
+<option value="square">Squares</option>
+</select>
+<div>
+<label>Stroke width <input id="strokeWidth" type="text"/></label> 
+<label>Glow width <input id="glowWidth" type="text"/></label>
+</div>
+<input type="button" value="Clear" id="clear"/>
+<span id="penNotice" style="display:none"><i>Pen is up. Click on canvas to resume drawing.</i></span>
+</div>
+<canvas width="700" height="680" id="awesome" style="border:1px dotted;float:left"></canvas>
+</body>
+</html>
