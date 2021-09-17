@@ -26,7 +26,7 @@ $(document).ready(function(){
   }
   $('#toggleBlackBG').click(clear);
   function followMouse(evt){
-  	if (!pendown) return;
+  	if (!drawing) return;
   	var canvas = document.getElementById("awesome");
   	var pos = getMousePos(canvas, evt);
     var context = canvas.getContext("2d");
@@ -89,13 +89,18 @@ context.beginPath();
 			y: Math.floor((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
     };
   }
+  function toggleDrawOn(){
+  	drawing = true;
+  }
+  function toggleDrawOff(){
+  	drawing = false;
+  }
+  
+  	document.getElementById("awesome").addEventListener('mousedown',toggleDrawOn, false);
+  	document.getElementById("awesome").addEventListener('mouseup',toggleDrawOn, false);
 	document.getElementById("awesome").addEventListener('mousemove', followMouse, false);
 	document.getElementById("awesome").addEventListener('touchmove', followMouse, false);
   clear();
-  var pendown = true;
+  var drawing = false;
   $("#clear").click(clear);
-  $('#awesome').click(function(){
-  	pendown = !pendown;
-    $('#penNotice').toggle(!pendown);
-  });
 });
