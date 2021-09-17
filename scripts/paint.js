@@ -89,11 +89,23 @@ context.beginPath();
   }
   
   function getMousePos(canvas, evt) {
-  	var rect = canvas.getBoundingClientRect();
-  	return {
-			x: Math.floor((evt.clientX-rect.left)/(rect.right-rect.left)*canvas.width),
-			y: Math.floor((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
-    };
+  	//var rect = canvas.getBoundingClientRect();
+  	//return {
+	//		x: Math.floor((evt.clientX-rect.left)/(rect.right-rect.left)*canvas.width),
+	//		y: Math.floor((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
+    //};
+    if(evt.offsetX){
+    	return {
+    		x:evt.offsetX,
+    		y:evt.offsetY
+    	}
+    }
+    else if (evt.layerX){
+    	return {
+    		x:evt.layerX,
+    		y:evt.layerY
+    	}
+    }
   }
   function toggleDrawOn(){
   	drawing = true;
