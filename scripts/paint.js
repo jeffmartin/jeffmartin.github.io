@@ -90,6 +90,7 @@ context.beginPath();
     };
   }
 	document.getElementById("awesome").addEventListener('mousemove', followMouse, false);
+	document.getElementById("awesome").addEventListener('touchmove', followMouse, false);
   clear();
   var pendown = true;
   $("#clear").click(clear);
