@@ -97,7 +97,7 @@ context.beginPath();
   }
   
   	document.getElementById("awesome").addEventListener('mousedown',toggleDrawOn, false);
-  	document.getElementById("awesome").addEventListener('mouseup',toggleDrawOn, false);
+  	document.getElementById("awesome").addEventListener('mouseup',toggleDrawOff, false);
 	document.getElementById("awesome").addEventListener('mousemove', followMouse, false);
 	document.getElementById("awesome").addEventListener('touchmove', followMouse, false);
   clear();
