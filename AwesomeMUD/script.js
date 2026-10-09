@@ -452,13 +452,13 @@ function loadGame() {
     state.currentRoom = parsed.currentRoom || 'airlock';
     state.inventory = parsed.inventory || [];
     state.visited = new Set(parsed.visited || ['airlock']);
-    state.oxygenTurns = Number.isFinite(parsed.oxygenTurns)
-      ? Math.max(0, Math.min(MAX_OXYGEN_TURNS, parsed.oxygenTurns))
-      : MAX_OXYGEN_TURNS;
     state.gameWon = Boolean(parsed.gameWon);
-    state.gameOver = Boolean(parsed.gameOver) || (state.oxygenTurns === 0 && !state.gameWon);
     state.crewSaved = Boolean(parsed.crewSaved);
     state.systemsRepaired = Boolean(parsed.systemsRepaired);
+    state.oxygenTurns = Number.isFinite(parsed.oxygenTurns)
+      ? Math.max(0, Math.min(oxygenCapacity(), parsed.oxygenTurns))
+      : MAX_OXYGEN_TURNS;
+    state.gameOver = Boolean(parsed.gameOver) || (state.oxygenTurns === 0 && !state.gameWon);
     appendLine('Saved progress restored.', 'system');
     renderRoom();
     updateSvgHighlight();
@@ -498,7 +498,7 @@ function renderRoom() {
 }
 
 // Victory celebration: banner, confetti canvas, and chime
-function celebrateVictory() {
+function celebrateVictory(endingTitle) {
   try {
     // audio chime (simple chord)
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -528,7 +528,7 @@ function celebrateVictory() {
   if (!existing) {
     const banner = document.createElement('div');
     banner.className = 'victory-banner';
-    banner.textContent = 'Mission Complete — Deep Drift Stabilized';
+    banner.textContent = endingTitle;
     document.body.appendChild(banner);
     setTimeout(() => {
       banner.style.transition = 'opacity 600ms ease, transform 600ms ease';
@@ -661,11 +661,12 @@ function handleUse(itemName) {
 
     state.gameWon = true;
     state.inventory = state.inventory.filter((item) => item.toLowerCase() !== 'flux core');
+    const ending = getMissionEnding();
     statusText();
-    appendLine('You slot the flux core into the nav console. The ship hums back to life and the mission is a success.', 'system');
-    appendLine('The stars outside the bridge glow bright again as the Deep Drift resumes its course.', 'info');
+    appendLine('You slot the flux core into the nav console. The reactor catches and the ship comes back online.', 'system');
+    appendLine(`${ending.title}: ${ending.description}`, 'success');
     updateMapDisplay();
-    celebrateVictory();
+    celebrateVictory(ending.title);
     return;
   }
 
@@ -736,6 +737,34 @@ function handleUse(itemName) {
   }
 
   appendLine(`You do not have a ${itemName}.`, 'warning');
+}
+
+function getMissionEnding() {
+  if (state.crewSaved && state.systemsRepaired) {
+    return {
+      title: 'Rescue Beacon',
+      description: 'Dr. Chen joins you on the bridge. With life support restored, the Deep Drift returns home and broadcasts a signal for any other survivors.',
+    };
+  }
+
+  if (state.crewSaved) {
+    return {
+      title: 'Last-Minute Evacuation',
+      description: 'Dr. Chen guides you toward home, but failing life support forces an evacuation at the nearest station.',
+    };
+  }
+
+  if (state.systemsRepaired) {
+    return {
+      title: 'Silent Homecoming',
+      description: 'Life support holds and the ship reaches home, but Dr. Chen never answers. You leave a beacon active for anyone still out there.',
+    };
+  }
+
+  return {
+    title: 'Fragile Return',
+    description: 'The ship begins the long trip home on failing life support, leaving the distress signal unanswered.',
+  };
 }
 
 function handleMove(direction) {
