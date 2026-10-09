@@ -76,6 +76,7 @@ const rooms = {
 };
 
 const MAX_OXYGEN_TURNS = 18;
+const SIDE_QUEST_OXYGEN_REWARD = 4;
 
 const state = {
   currentRoom: 'airlock',
@@ -411,9 +412,17 @@ function roomDescription() {
 }
 
 function statusText() {
-  statusEl.textContent = state.gameWon ? 'Mission Complete' : state.gameOver ? 'No Oxygen' : `O2 ${state.oxygenTurns}`;
+  statusEl.textContent = state.gameWon
+    ? 'Mission Complete'
+    : state.gameOver
+      ? 'No Oxygen'
+      : `O2 ${state.oxygenTurns}/${oxygenCapacity()}`;
   statusEl.classList.toggle('is-danger', state.gameOver);
   statusEl.classList.toggle('is-success', state.gameWon);
+}
+
+function oxygenCapacity() {
+  return MAX_OXYGEN_TURNS + (state.crewSaved ? SIDE_QUEST_OXYGEN_REWARD : 0) + (state.systemsRepaired ? SIDE_QUEST_OXYGEN_REWARD : 0);
 }
 
 function saveGame() {
@@ -696,6 +705,8 @@ function handleUse(itemName) {
     appendLine('"Thank... thank you. I\'m in the med bay. The reactor overload... I managed to seal it. Flux core is... in the core chamber."', 'info');
     appendLine('You have saved a crew member and learned the reactor location. The mission suddenly feels less lonely.', 'system');
     state.crewSaved = true;
+    state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
+    appendLine(`Dr. Chen shares emergency oxygen: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
     updateMapDisplay();
     return;
   }
@@ -713,6 +724,8 @@ function handleUse(itemName) {
     appendLine('You apply the repair patch to the damaged power conduit. Sparks stop flying and the panel stabilizes.', 'system');
     appendLine('The ship\'s secondary systems come back online. Life support is now at 87%.', 'info');
     state.systemsRepaired = true;
+    state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
+    appendLine(`Restored life support expands your oxygen reserve: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
     updateMapDisplay();
     return;
   }
