@@ -694,25 +694,26 @@ function handleTake(itemName) {
   const room = rooms[state.currentRoom];
   if (!itemName) {
     appendLine('Take what?', 'warning');
-    return;
+    return false;
   }
 
   const item = room.items.find((entry) => entry.toLowerCase() === itemName.toLowerCase());
   if (!item) {
     appendLine(`You do not see a ${itemName} here.`, 'warning');
-    return;
+    return false;
   }
 
   room.items = room.items.filter((entry) => entry !== item);
   state.inventory.push(item);
   appendLine(`You take the ${item}.`, 'system');
   updateMapDisplay();
+  return true;
 }
 
 function handleUse(itemName) {
   if (!itemName) {
     appendLine('Use what?', 'warning');
-    return;
+    return false;
   }
 
   const normalized = itemName.toLowerCase();
@@ -722,7 +723,7 @@ function handleUse(itemName) {
   if (state.currentRoom === 'commandDeck' && normalized === 'flux core') {
     if (!inInventory) {
       appendLine('You need the flux core before you can stabilize the ship.', 'warning');
-      return;
+      return false;
     }
 
     state.gameWon = true;
@@ -733,40 +734,40 @@ function handleUse(itemName) {
     appendLine(`${ending.title}: ${ending.description}`, 'success');
     updateMapDisplay();
     celebrateVictory(ending.title);
-    return;
+    return true;
   }
 
   // Oxygen key at airlock
   if (state.currentRoom === 'airlock' && normalized === 'oxygen key') {
     if (!inInventory) {
       appendLine('You do not have an oxygen key.', 'warning');
-      return;
+      return false;
     }
     appendLine('You unlock the emergency supply locker with the oxygen key. Inside, you find ration packs and technical manuals.', 'system');
     appendLine('They won\'t help you leave, but they confirm others were here before.', 'info');
-    return;
+    return true;
   }
 
   // Fuel cell at docking bay
   if (state.currentRoom === 'dockingBay' && normalized === 'fuel cell') {
     if (!inInventory) {
       appendLine('You do not have a fuel cell.', 'warning');
-      return;
+      return false;
     }
     appendLine('You insert the fuel cell into the shuttle\'s auxiliary power port. The shuttle\'s lights flicker to life.', 'system');
     appendLine('It\'s not enough to launch, but you can access the flight logs now. The last entry reads: "Reactor critical. All hands to emergency stations."', 'info');
-    return;
+    return true;
   }
 
   // Medkit at observation deck (to help distressed crew)
   if (state.currentRoom === 'observationDeck' && normalized === 'medkit') {
     if (!inInventory) {
       appendLine('You do not have a medkit.', 'warning');
-      return;
+      return false;
     }
     if (state.crewSaved) {
       appendLine('There is no one left to help here.', 'info');
-      return;
+      return false;
     }
     appendLine('You respond to the distress signal. Dr. Chen\'s voice crackles through the comm, weakened but alive.', 'system');
     appendLine('"Thank... thank you. I\'m in the med bay. The reactor overload... I managed to seal it. Flux core is... in the core chamber."', 'info');
@@ -776,18 +777,18 @@ function handleUse(itemName) {
     state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
     appendLine(`Dr. Chen shares emergency oxygen: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
     updateMapDisplay();
-    return;
+    return true;
   }
 
   // Repair patch in maintenance corridor
   if (state.currentRoom === 'maintenanceCorridor' && normalized === 'repair patch') {
     if (!inInventory) {
       appendLine('You do not have a repair patch.', 'warning');
-      return;
+      return false;
     }
     if (state.systemsRepaired) {
       appendLine('The systems are already repaired. There\'s nothing more to fix here.', 'info');
-      return;
+      return false;
     }
     appendLine('You apply the repair patch to the damaged power conduit. Sparks stop flying and the panel stabilizes.', 'system');
     appendLine('The ship\'s secondary systems come back online. Life support is now at 87%.', 'info');
@@ -795,15 +796,16 @@ function handleUse(itemName) {
     state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
     appendLine(`Restored life support expands your oxygen reserve: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
     updateMapDisplay();
-    return;
+    return true;
   }
 
   if (inInventory) {
     appendLine(`You try to use the ${itemName}, but there's nothing here to use it on.`, 'info');
-    return;
+    return false;
   }
 
   appendLine(`You do not have a ${itemName}.`, 'warning');
+  return false;
 }
 
 function getMissionEnding() {
@@ -840,7 +842,7 @@ function handleMove(direction) {
 
   if (!target) {
     appendLine(`You cannot go ${direction} from here.`, 'warning');
-    return;
+    return false;
   }
 
   state.currentRoom = target;
@@ -852,6 +854,7 @@ function handleMove(direction) {
     appendLine('Warning: asteroid debris is striking the observation windows. Actions here cost 2 oxygen until Dr. Chen guides you through the impact zone.', 'warning');
   }
   renderRoom();
+  return true;
 }
 
 function handleHelp() {
@@ -862,7 +865,7 @@ function handleHelp() {
 function handleExamine(subject) {
   if (!subject) {
     appendLine('Examine what?', 'warning');
-    return;
+    return false;
   }
 
   const norm = subject.toLowerCase();
@@ -872,13 +875,13 @@ function handleExamine(subject) {
     appendLine('The distress beacon pulses with an intermittent signal. You pick up a voice transmission.', 'system');
     appendLine('"...Deep Drift to any listening... Dr. Chen, medical officer. Reactor critical. Need... need help."', 'info');
     appendLine('The beacon is still active. Someone is waiting for you.', 'system');
-    return;
+    return true;
   }
 
   if (state.currentRoom === 'crewQuarters' && (norm === 'roster' || norm === 'panel' || norm === 'names')) {
     appendLine('The wall panel shows the crew manifest. Most entries have been scratched or marked "DECEASED".', 'system');
     appendLine('Only one name remains: "Dr. Sarah Chen - Medical Officer - Last Known Location: Medical Bay".', 'info');
-    return;
+    return true;
   }
 
   if (state.currentRoom === 'dockingBay' && (norm === 'shuttle' || norm === 'shuttle logs')) {
@@ -888,22 +891,23 @@ function handleExamine(subject) {
     } else {
       appendLine('You\'ll need a fuel cell to power it up.', 'info');
     }
-    return;
+    return true;
   }
 
   if (state.currentRoom === 'commandDeck' && (norm === 'console' || norm === 'nav console' || norm === 'display')) {
     appendLine('The navigation console is dark. Its status display flickers weakly, showing: "REACTOR OFFLINE - CRITICAL ERROR".', 'system');
     appendLine('It will need the reactor\'s flux core to restart the ship.', 'info');
-    return;
+    return true;
   }
 
   if (state.currentRoom === 'reactorCore' && (norm === 'core' || norm === 'light' || norm === 'chamber')) {
     appendLine('The reactor core glows with an unstable hum. At its center, a crystalline flux core sits mounted in a harness.', 'system');
     appendLine('It looks like exactly what the command deck needs.', 'info');
-    return;
+    return true;
   }
 
   appendLine('You see nothing special about that.', 'info');
+  return false;
 }
 
 function handleMap() {
@@ -997,6 +1001,8 @@ function parseCommand(rawInput) {
     return;
   }
 
+  let actionSucceeded = false;
+
   switch (command) {
     case 'look':
     case 'l':
@@ -1007,14 +1013,14 @@ function parseCommand(rawInput) {
       handleInventory();
       break;
     case 'take':
-      handleTake(rest);
+      actionSucceeded = handleTake(rest);
       break;
     case 'use':
-      handleUse(rest);
+      actionSucceeded = handleUse(rest);
       break;
     case 'go':
     case 'move':
-      handleMove(getDirectionAlias(rest.toLowerCase()));
+      actionSucceeded = handleMove(getDirectionAlias(rest.toLowerCase()));
       break;
     case 'n':
     case 's':
@@ -1024,12 +1030,12 @@ function parseCommand(rawInput) {
     case 'south':
     case 'east':
     case 'west':
-      handleMove(getDirectionAlias(command));
+      actionSucceeded = handleMove(getDirectionAlias(command));
       break;
     case 'examine':
     case 'x':
     case 'read':
-      handleExamine(rest);
+      actionSucceeded = handleExamine(rest);
       break;
     case 'help':
     case '?':
@@ -1051,7 +1057,7 @@ function parseCommand(rawInput) {
       appendLine(`Unknown command: ${input}. Type "help" for a list of actions.`, 'warning');
   }
 
-  if (consumesOxygen) {
+  if (consumesOxygen && actionSucceeded) {
     const oxygenCost = 1 + leakSurcharge + debrisSurcharge;
     state.oxygenTurns = Math.max(0, state.oxygenTurns - oxygenCost);
     statusText();
@@ -1061,6 +1067,8 @@ function parseCommand(rawInput) {
       statusText();
       appendLine('Oxygen depleted. The mission has failed. Use "reset" to try again or "load" to restore a save.', 'warning');
     }
+  } else if (consumesOxygen) {
+    appendLine('No oxygen spent; the action did not succeed.', 'info');
   }
 
   updateRoomActions();
