@@ -281,6 +281,18 @@ h1 {
   text-transform: uppercase;
 }
 
+.status-pill.is-danger {
+  border-color: rgba(255, 142, 142, 0.7);
+  background: rgba(255, 142, 142, 0.16);
+  color: var(--danger);
+}
+
+.status-pill.is-success {
+  border-color: rgba(122, 240, 182, 0.7);
+  background: rgba(122, 240, 182, 0.16);
+  color: var(--success);
+}
+
 .game-container {
   display: flex;
   gap: 18px;

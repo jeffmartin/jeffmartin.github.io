@@ -75,11 +75,15 @@ const rooms = {
   },
 };
 
+const MAX_OXYGEN_TURNS = 18;
+
 const state = {
   currentRoom: 'airlock',
   inventory: [],
   visited: new Set(['airlock']),
+  oxygenTurns: MAX_OXYGEN_TURNS,
   gameWon: false,
+  gameOver: false,
   crewSaved: false,
   systemsRepaired: false,
   suppliesFound: false,
@@ -237,7 +241,7 @@ function updateMobileNavigation() {
     button.dataset.direction = direction;
     button.textContent = direction;
     button.setAttribute('aria-label', `Go ${direction} to ${rooms[destination].name}`);
-    button.addEventListener('click', () => handleMove(direction));
+    button.addEventListener('click', () => parseCommand(direction));
     mobileNavigationEl.appendChild(button);
   });
 }
@@ -392,16 +396,9 @@ function updateSvgHighlight() {
 
 function moveToRoom(targetKey) {
   const room = rooms[state.currentRoom];
-  const exits = Object.values(room.exits || {});
-  if (exits.includes(targetKey)) {
-    state.currentRoom = targetKey;
-    appendLine(`You move to ${rooms[targetKey].name}.`, 'system');
-    renderRoom();
-    updateMapDisplay();
-    updateSvgHighlight();
-  } else {
-    appendLine('You cannot reach that location directly from here.', 'warning');
-  }
+  const exit = Object.entries(room.exits || {}).find(([, destination]) => destination === targetKey);
+  if (exit) parseCommand(exit[0]);
+  else appendLine('You cannot reach that location directly from here.', 'warning');
 }
 
 function roomDescription() {
@@ -414,7 +411,9 @@ function roomDescription() {
 }
 
 function statusText() {
-  statusEl.textContent = state.gameWon ? 'Mission Complete' : 'Exploring';
+  statusEl.textContent = state.gameWon ? 'Mission Complete' : state.gameOver ? 'No Oxygen' : `O2 ${state.oxygenTurns}`;
+  statusEl.classList.toggle('is-danger', state.gameOver);
+  statusEl.classList.toggle('is-success', state.gameWon);
 }
 
 function saveGame() {
@@ -422,7 +421,9 @@ function saveGame() {
     currentRoom: state.currentRoom,
     inventory: state.inventory,
     visited: [...state.visited],
+    oxygenTurns: state.oxygenTurns,
     gameWon: state.gameWon,
+    gameOver: state.gameOver,
     crewSaved: state.crewSaved,
     systemsRepaired: state.systemsRepaired,
   };
@@ -442,7 +443,11 @@ function loadGame() {
     state.currentRoom = parsed.currentRoom || 'airlock';
     state.inventory = parsed.inventory || [];
     state.visited = new Set(parsed.visited || ['airlock']);
+    state.oxygenTurns = Number.isFinite(parsed.oxygenTurns)
+      ? Math.max(0, Math.min(MAX_OXYGEN_TURNS, parsed.oxygenTurns))
+      : MAX_OXYGEN_TURNS;
     state.gameWon = Boolean(parsed.gameWon);
+    state.gameOver = Boolean(parsed.gameOver) || (state.oxygenTurns === 0 && !state.gameWon);
     state.crewSaved = Boolean(parsed.crewSaved);
     state.systemsRepaired = Boolean(parsed.systemsRepaired);
     appendLine('Saved progress restored.', 'system');
@@ -457,7 +462,9 @@ function resetGame() {
   state.currentRoom = 'airlock';
   state.inventory = [];
   state.visited = new Set(['airlock']);
+  state.oxygenTurns = MAX_OXYGEN_TURNS;
   state.gameWon = false;
+  state.gameOver = false;
   state.crewSaved = false;
   state.systemsRepaired = false;
   localStorage.removeItem('deep-drift-save');
@@ -860,8 +867,15 @@ function parseCommand(rawInput) {
   const tokens = input.split(/\s+/);
   const command = tokens[0].toLowerCase();
   const rest = tokens.slice(1).join(' ');
+  const freeCommands = ['look', 'l', 'inventory', 'inv', 'help', '?', 'map', 'save', 'load', 'reset'];
+  const consumesOxygen = ['take', 'use', 'go', 'move', 'n', 's', 'e', 'w', 'north', 'south', 'east', 'west', 'examine', 'x', 'read'].includes(command);
 
-  if (state.gameWon && !['look', 'inventory', 'help', 'map', 'save', 'load', 'reset'].includes(command)) {
+  if (state.gameOver && consumesOxygen) {
+    appendLine('Oxygen is depleted. Use "reset" to try again or "load" to restore a save.', 'warning');
+    return;
+  }
+
+  if (state.gameWon && !freeCommands.includes(command)) {
     appendLine('The ship is stable and the mission is complete. You can still explore, but the main objective is already won.', 'info');
     return;
   }
@@ -919,11 +933,22 @@ function parseCommand(rawInput) {
     default:
       appendLine(`Unknown command: ${input}. Type "help" for a list of actions.`, 'warning');
   }
+
+  if (consumesOxygen) {
+    state.oxygenTurns = Math.max(0, state.oxygenTurns - 1);
+    statusText();
+    if (state.oxygenTurns === 0 && !state.gameWon) {
+      state.gameOver = true;
+      statusText();
+      appendLine('Oxygen depleted. The mission has failed. Use "reset" to try again or "load" to restore a save.', 'warning');
+    }
+  }
 }
 
 function init() {
   appendLine('Deep Drift online. Welcome aboard the research vessel.', 'system');
   appendLine('Your mission: restore the ship and return to stable orbit.', 'system');
+  appendLine(`Oxygen reserve: ${MAX_OXYGEN_TURNS} actions. Movement and interactions consume oxygen; look, inventory, help, map, save, and load are free.`, 'warning');
   appendLine('Type "help" to see available commands.', 'system');
   renderRoom();
   renderSvgMap();
