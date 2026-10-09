@@ -407,6 +407,9 @@ function roomDescription() {
   const exits = Object.keys(current.exits);
   const items = current.items.length ? `Items here: ${current.items.join(', ')}.` : 'No items visible.';
   appendLine(`\n${current.name}: ${current.description}`, 'info');
+  if (state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired) {
+    appendLine('A sharp hiss cuts through the air from the leaking conduit.', 'warning');
+  }
   appendLine(items, 'info');
   appendLine(`Exits: ${exits.join(', ') || 'none'}.`, 'system');
 }
@@ -778,6 +781,9 @@ function handleMove(direction) {
 
   state.currentRoom = target;
   appendLine(`You move ${direction}.`, 'system');
+  if (target === 'maintenanceCorridor' && !state.systemsRepaired) {
+    appendLine('Warning: a pressure leak is draining oxygen fast. Actions in Maintenance cost 2 oxygen until repaired.', 'warning');
+  }
   renderRoom();
 }
 
@@ -911,6 +917,7 @@ function parseCommand(rawInput) {
   const rest = tokens.slice(1).join(' ');
   const freeCommands = ['look', 'l', 'inventory', 'inv', 'help', '?', 'map', 'save', 'load', 'reset'];
   const consumesOxygen = ['take', 'use', 'go', 'move', 'n', 's', 'e', 'w', 'north', 'south', 'east', 'west', 'examine', 'x', 'read'].includes(command);
+  const leakSurcharge = state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired ? 1 : 0;
 
   if (state.gameOver && consumesOxygen) {
     appendLine('Oxygen is depleted. Use "reset" to try again or "load" to restore a save.', 'warning');
@@ -977,7 +984,7 @@ function parseCommand(rawInput) {
   }
 
   if (consumesOxygen) {
-    state.oxygenTurns = Math.max(0, state.oxygenTurns - 1);
+    state.oxygenTurns = Math.max(0, state.oxygenTurns - 1 - leakSurcharge);
     statusText();
     if (state.oxygenTurns === 0 && !state.gameWon) {
       state.gameOver = true;
