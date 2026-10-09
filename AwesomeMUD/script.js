@@ -99,6 +99,22 @@ const mapDisplayEl = document.getElementById('map-display');
 const mapSvgContainer = document.getElementById('map-svg');
 const mapTextEl = document.getElementById('map-text');
 const mobileNavigationEl = document.getElementById('mobile-navigation');
+const roomActionsEl = document.getElementById('room-actions');
+const mapPanelEl = document.getElementById('map-panel');
+const mobileLayoutQuery = window.matchMedia('(max-width: 680px)');
+let mapPanelUsesMobileLayout = mobileLayoutQuery.matches;
+
+function syncMapPanelToViewport() {
+  const usesMobileLayout = window.innerWidth <= 680;
+  if (mapPanelEl && usesMobileLayout !== mapPanelUsesMobileLayout) {
+    mapPanelEl.open = !usesMobileLayout;
+  }
+  mapPanelUsesMobileLayout = usesMobileLayout;
+}
+
+if (mapPanelEl) mapPanelEl.open = !mapPanelUsesMobileLayout;
+window.addEventListener('resize', syncMapPanelToViewport);
+mobileLayoutQuery.addEventListener('change', syncMapPanelToViewport);
 
 // Canvas starfield: draws sparse animated stars for a natural look
 function initStarfield() {
@@ -244,6 +260,49 @@ function updateMobileNavigation() {
     button.setAttribute('aria-label', `Go ${direction} to ${rooms[destination].name}`);
     button.addEventListener('click', () => parseCommand(direction));
     mobileNavigationEl.appendChild(button);
+  });
+}
+
+function updateRoomActions() {
+  if (!roomActionsEl) return;
+  roomActionsEl.replaceChildren();
+  if (state.gameWon || state.gameOver) return;
+
+  const room = rooms[state.currentRoom];
+  const actions = room.items.map((item) => ({ label: `Take ${item}`, command: `take ${item}` }));
+  const examinationTargets = {
+    dockingBay: 'shuttle',
+    observationDeck: 'beacon',
+    crewQuarters: 'roster',
+    commandDeck: 'console',
+    reactorCore: 'core',
+  };
+  const examinationTarget = examinationTargets[state.currentRoom];
+  if (examinationTarget) {
+    actions.push({ label: `Examine ${examinationTarget}`, command: `examine ${examinationTarget}` });
+  }
+
+  const usableItems = {
+    airlock: 'oxygen key',
+    dockingBay: 'fuel cell',
+    observationDeck: 'medkit',
+    maintenanceCorridor: 'repair patch',
+    commandDeck: 'flux core',
+  };
+  const usableItem = state.currentRoom === 'observationDeck' && state.crewSaved
+    ? null
+    : usableItems[state.currentRoom];
+  if (usableItem && state.inventory.some((item) => item.toLowerCase() === usableItem)) {
+    actions.push({ label: `Use ${usableItem}`, command: `use ${usableItem}` });
+  }
+
+  actions.forEach((action) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'room-action-button';
+    button.textContent = action.label;
+    button.addEventListener('click', () => parseCommand(action.command));
+    roomActionsEl.appendChild(button);
   });
 }
 
@@ -501,6 +560,7 @@ function renderRoom() {
   updateMapDisplay();
   updateSvgHighlight();
   updateMobileNavigation();
+  updateRoomActions();
 }
 
 // Victory celebration: banner, confetti canvas, and chime
@@ -992,21 +1052,25 @@ function parseCommand(rawInput) {
   }
 
   if (consumesOxygen) {
-    state.oxygenTurns = Math.max(0, state.oxygenTurns - 1 - leakSurcharge - debrisSurcharge);
+    const oxygenCost = 1 + leakSurcharge + debrisSurcharge;
+    state.oxygenTurns = Math.max(0, state.oxygenTurns - oxygenCost);
     statusText();
+    appendLine(`Oxygen spent: ${oxygenCost}. Reserve: ${state.oxygenTurns}/${oxygenCapacity()}.`, state.oxygenTurns <= 3 ? 'warning' : 'system');
     if (state.oxygenTurns === 0 && !state.gameWon) {
       state.gameOver = true;
       statusText();
       appendLine('Oxygen depleted. The mission has failed. Use "reset" to try again or "load" to restore a save.', 'warning');
     }
   }
+
+  updateRoomActions();
 }
 
 function init() {
   appendLine('Deep Drift online. Welcome aboard the research vessel.', 'system');
   appendLine('Your mission: restore the ship and return to stable orbit.', 'system');
   appendLine(`Oxygen reserve: ${MAX_OXYGEN_TURNS} actions. Movement and interactions consume oxygen; look, inventory, help, map, save, and load are free.`, 'warning');
-  appendLine('Type "help" to see available commands.', 'system');
+  appendLine('Start by taking the oxygen key, then head north toward the Docking Bay. Type "help" for more commands.', 'system');
   renderRoom();
   renderSvgMap();
   updateMapDisplay();

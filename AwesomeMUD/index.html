@@ -20,6 +20,9 @@
         <p class="intro-text">
           Explore the vessel, gather what you can, and bring the ship back online.
         </p>
+        <p class="intro-text">
+          Start with <code>take oxygen key</code>, then head north. Movement and interaction attempts use oxygen; hazard rooms warn you when they cost extra.
+        </p>
         <button id="start-game-btn" type="button">Begin Mission</button>
       </div>
     </div>
@@ -45,6 +48,7 @@
           <div id="game-output" class="game-output" aria-live="polite"></div>
 
           <nav id="mobile-navigation" class="mobile-navigation" aria-label="Available exits"></nav>
+          <nav id="room-actions" class="room-actions" aria-label="Room actions"></nav>
 
           <form id="command-form" class="command-form">
             <label for="command-input" class="sr-only">Command</label>
@@ -60,14 +64,16 @@
         </main>
 
         <aside class="game-sidebar">
-          <div class="sidebar-title">Vessel Map</div>
-          <div id="map-display" class="map-display">
-            <div id="map-current-label-outer" class="map-current-label-outer" aria-hidden="false">
-              <span id="map-current-name" class="map-current-name">Unknown</span>
+          <details id="map-panel" class="map-panel" open>
+            <summary class="sidebar-title">Vessel Map &amp; Objectives</summary>
+            <div id="map-display" class="map-display">
+              <div id="map-current-label-outer" class="map-current-label-outer" aria-hidden="false">
+                <span id="map-current-name" class="map-current-name">Unknown</span>
+              </div>
+              <div id="map-svg" class="map-svg" aria-hidden="false"></div>
+              <pre id="map-text" class="map-text" aria-hidden="false"></pre>
             </div>
-            <div id="map-svg" class="map-svg" aria-hidden="false"></div>
-            <pre id="map-text" class="map-text" aria-hidden="false"></pre>
-          </div>
+          </details>
         </aside>
       </div>
     </div>
