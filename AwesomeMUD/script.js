@@ -93,6 +93,7 @@ const statusEl = document.getElementById('status-pill');
 const mapDisplayEl = document.getElementById('map-display');
 const mapSvgContainer = document.getElementById('map-svg');
 const mapTextEl = document.getElementById('map-text');
+const mobileNavigationEl = document.getElementById('mobile-navigation');
 
 // Canvas starfield: draws sparse animated stars for a natural look
 function initStarfield() {
@@ -223,6 +224,22 @@ function updateMapDisplay() {
   mapContent.push(`INVENTORY: ${state.inventory.length} items`);
   
   if (mapTextEl) mapTextEl.textContent = mapContent.join('\n');
+}
+
+function updateMobileNavigation() {
+  if (!mobileNavigationEl) return;
+  mobileNavigationEl.replaceChildren();
+
+  Object.entries(rooms[state.currentRoom].exits || {}).forEach(([direction, destination]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'navigation-button';
+    button.dataset.direction = direction;
+    button.textContent = direction;
+    button.setAttribute('aria-label', `Go ${direction} to ${rooms[destination].name}`);
+    button.addEventListener('click', () => handleMove(direction));
+    mobileNavigationEl.appendChild(button);
+  });
 }
 
 // Positions for SVG map nodes (x,y in 0..100 coordinate space)
@@ -461,6 +478,7 @@ function renderRoom() {
   statusText();
   updateMapDisplay();
   updateSvgHighlight();
+  updateMobileNavigation();
 }
 
 // Victory celebration: banner, confetti canvas, and chime
