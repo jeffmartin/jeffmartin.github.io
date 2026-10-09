@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deep Drift</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="starfield" aria-hidden="true"></div>
+
+    <div id="intro-screen" class="intro-screen">
+      <div class="intro-card">
+        <p class="eyebrow">Deep Space Research Vessel</p>
+        <h2>Deep Drift</h2>
+        <p class="intro-text">
+          A routine survey mission has gone dark. Your crew is gone, the ship is failing,
+          and the only way home is to restore the reactor and re-establish control.
+        </p>
+        <p class="intro-text">
+          Explore the vessel, gather what you can, and bring the ship back online.
+        </p>
+        <button id="start-game-btn" type="button">Begin Mission</button>
+      </div>
+    </div>
+
+    <div class="app-shell" id="game-shell" hidden>
+      <header class="topbar">
+        <h1>
+          <svg class="logo-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <g fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2 C13.6 4.5 16 7 16 9.5 C16 12 13 13.5 12 22 C11 13.5 8 12 8 9.5 C8 7 10.4 4.5 12 2 Z" fill="currentColor" />
+              <circle cx="12" cy="9.2" r="1.6" fill="#03131b" />
+              <path d="M9.5 14 L6 18" stroke="#ffffff" stroke-opacity="0.12" />
+              <path d="M14.5 14 L18 18" stroke="#ffffff" stroke-opacity="0.12" />
+            </g>
+          </svg>
+          <span class="title-text">Deep Drift</span>
+        </h1>
+        <div class="status-pill" id="status-pill">Ready</div>
+      </header>
+
+      <div class="game-container">
+        <main class="game-panel">
+          <div id="game-output" class="game-output" aria-live="polite"></div>
+
+          <form id="command-form" class="command-form">
+            <label for="command-input" class="sr-only">Command</label>
+            <input
+              id="command-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Type a command..."
+            />
+            <button type="submit">Send</button>
+          </form>
+        </main>
+
+        <aside class="game-sidebar">
+          <div class="sidebar-title">Vessel Map</div>
+          <div id="map-display" class="map-display">
+            <div id="map-current-label-outer" class="map-current-label-outer" aria-hidden="false">
+              <span id="map-current-name" class="map-current-name">Unknown</span>
+            </div>
+            <div id="map-svg" class="map-svg" aria-hidden="false"></div>
+            <pre id="map-text" class="map-text" aria-hidden="false"></pre>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
