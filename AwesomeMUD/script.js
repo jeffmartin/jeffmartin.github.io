@@ -41,7 +41,7 @@ const rooms = {
   observationDeck: {
     name: 'Observation Deck',
     description:
-      'The deck looks out into deep space. Broken asteroid shards drift past the windows while the ship shudders gently in the dark. A faint distress beacon blinks on an old monitor.',
+      'The deck looks out into deep space. Asteroid debris slams against the observation windows as the ship shudders in the dark. A faint distress beacon blinks on an old monitor.',
     exits: { south: 'habitatRing' },
     items: [],
   },
@@ -410,6 +410,9 @@ function roomDescription() {
   if (state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired) {
     appendLine('A sharp hiss cuts through the air from the leaking conduit.', 'warning');
   }
+  if (state.currentRoom === 'observationDeck' && !state.crewSaved) {
+    appendLine('Asteroid debris batters the windows. Actions here cost 2 oxygen until Dr. Chen guides you through the impact zone.', 'warning');
+  }
   appendLine(items, 'info');
   appendLine(`Exits: ${exits.join(', ') || 'none'}.`, 'system');
 }
@@ -708,6 +711,7 @@ function handleUse(itemName) {
     appendLine('You respond to the distress signal. Dr. Chen\'s voice crackles through the comm, weakened but alive.', 'system');
     appendLine('"Thank... thank you. I\'m in the med bay. The reactor overload... I managed to seal it. Flux core is... in the core chamber."', 'info');
     appendLine('You have saved a crew member and learned the reactor location. The mission suddenly feels less lonely.', 'system');
+    appendLine('Dr. Chen guides you through the debris field, clearing the extra oxygen cost here.', 'success');
     state.crewSaved = true;
     state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
     appendLine(`Dr. Chen shares emergency oxygen: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
@@ -783,6 +787,9 @@ function handleMove(direction) {
   appendLine(`You move ${direction}.`, 'system');
   if (target === 'maintenanceCorridor' && !state.systemsRepaired) {
     appendLine('Warning: a pressure leak is draining oxygen fast. Actions in Maintenance cost 2 oxygen until repaired.', 'warning');
+  }
+  if (target === 'observationDeck' && !state.crewSaved) {
+    appendLine('Warning: asteroid debris is striking the observation windows. Actions here cost 2 oxygen until Dr. Chen guides you through the impact zone.', 'warning');
   }
   renderRoom();
 }
@@ -918,6 +925,7 @@ function parseCommand(rawInput) {
   const freeCommands = ['look', 'l', 'inventory', 'inv', 'help', '?', 'map', 'save', 'load', 'reset'];
   const consumesOxygen = ['take', 'use', 'go', 'move', 'n', 's', 'e', 'w', 'north', 'south', 'east', 'west', 'examine', 'x', 'read'].includes(command);
   const leakSurcharge = state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired ? 1 : 0;
+  const debrisSurcharge = state.currentRoom === 'observationDeck' && !state.crewSaved ? 1 : 0;
 
   if (state.gameOver && consumesOxygen) {
     appendLine('Oxygen is depleted. Use "reset" to try again or "load" to restore a save.', 'warning');
@@ -984,7 +992,7 @@ function parseCommand(rawInput) {
   }
 
   if (consumesOxygen) {
-    state.oxygenTurns = Math.max(0, state.oxygenTurns - 1 - leakSurcharge);
+    state.oxygenTurns = Math.max(0, state.oxygenTurns - 1 - leakSurcharge - debrisSurcharge);
     statusText();
     if (state.oxygenTurns === 0 && !state.gameWon) {
       state.gameOver = true;
