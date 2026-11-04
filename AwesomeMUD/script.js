@@ -33,6 +33,8 @@ const {
   normalizeTravelDestination,
   UPGRADE_DEFINITIONS,
   upgradeShipSystem,
+  routeTravelTime,
+  discoverNewDestinations
 } = spaceSystems;
 const { createPhaseOneCommands } = phaseOneCommandModule;
 const { createSpaceCommands } = spaceCommandModule;
@@ -417,7 +419,9 @@ if (hasDocument) {
     fuelCapacity,
     hullCapacity,
     routeFuelCost,
+    routeTravelTime,
     normalizeTravelDestination,
+    discoverNewDestinations,
     upgradeShipSystem,
     UPGRADE_DEFINITIONS,
     awardProgress,

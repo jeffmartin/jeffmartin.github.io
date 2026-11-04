@@ -17,10 +17,12 @@
     fuelCapacity,
     hullCapacity,
     routeFuelCost,
+    routeTravelTime,
     normalizeTravelDestination,
     upgradeShipSystem,
     UPGRADE_DEFINITIONS,
     awardProgress,
+    discoverNewDestinations,
   }) {
     const getAwardProgress = typeof awardProgress === 'function'
       ? awardProgress
@@ -71,7 +73,8 @@
           : state.phase2.travelling && state.phase2.routeId === destination.id
             ? 'in transit'
             : 'ready';
-        appendLine((index + 1) + '. ' + destination.name + ' | ' + destination.type + ' | fuel ' + routeFuelCost(state, destination) + ' | eta ' + destination.travelTime + 's | hazard ' + destination.hazard + ' | ' + status, 'info');
+        const eta = typeof routeTravelTime === 'function' ? routeTravelTime(state, destination) : destination.travelTime;
+        appendLine((index + 1) + '. ' + destination.name + ' | ' + destination.type + ' | fuel ' + routeFuelCost(state, destination) + ' | eta ' + eta + 's | hazard ' + destination.hazard + ' | ' + status, 'info');
       });
       appendLine('Tip: use "ship" to check fuel, cargo, and current route status.', 'system');
       return true;
@@ -445,6 +448,18 @@
         appendLine('The navigation console module is required to plot routes.', 'warning');
         return false;
       }
+
+      // Auto-board when landed so the player doesn't need to type 'board' first
+      if (state.phase2.locationStatus === 'landed') {
+        const prevDest = state.phase2.currentDestination;
+        state.phase2.locationStatus = 'orbit';
+        state.phase2.activeZone = null;
+        state.currentRoom = 'commandDeck';
+        if (prevDest) {
+          appendLine('Auto-boarding ship. Departing orbit above ' + prevDest.name + '.', 'system');
+        }
+      }
+
       const routeName = normalizeTravelDestination(input);
       if (!routeName) {
         appendLine('Specify a destination name to travel to.', 'warning');
@@ -464,13 +479,25 @@
         } else if (reward) {
           appendLine('Route logged. ' + reward.message, 'system');
         }
+        // Discover new destinations when unvisited count drops low
+        const unvisited = (state.phase2.destinations || []).filter(function(d) { return !d.visited; });
+        if (unvisited.length <= 1 && typeof discoverNewDestinations === 'function') {
+          const newDests = discoverNewDestinations(state, 3);
+          if (newDests.length > 0) {
+            appendLine('Long-range sensors detect ' + newDests.length + ' uncharted signals in this sector.', 'system');
+            newDests.forEach(function(d) {
+              appendLine('  > ' + d.name + ' (' + d.type + ') — ' + d.summary, 'info');
+            });
+          }
+        }
         renderRoom();
       });
       if (!started.traveling) {
         appendLine(started.reason, 'warning');
         return false;
       }
-      appendLine('Route plotted to ' + destination.name + '. Departure window open. Estimated arrival: ' + destination.travelTime + ' seconds.', 'system');
+      const eta = started.travelTime || destination.travelTime;
+      appendLine('Route plotted to ' + destination.name + '. Departure window open. Estimated arrival: ' + eta + ' seconds.', 'system');
       appendLine('Fuel burn: ' + started.fuelCost + '. The ship is now in transit.', 'info');
       appendLine('While in transit, you can craft, inspect modules, or check ship status.', 'info');
       return true;

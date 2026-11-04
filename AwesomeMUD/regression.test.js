@@ -274,10 +274,14 @@ test('flight and travel commands list routes, charge fuel, and land by name or i
   assert.ok(gameSession.actionLabels.includes('Board Ship'));
 
   const landedFuel = gameSession.state.ship.fuel;
+  const stationLegFuelCost = spaceSystems.routeFuelCost(gameSession.state, station);
   gameSession.command(`travel ${station.id}`);
-  assert.equal(gameSession.state.phase2.travelling, false);
-  assert.equal(gameSession.state.ship.fuel, landedFuel);
-  assert.match(gameSession.output, /Board your ship before launching/);
+  assert.equal(gameSession.state.phase2.travelling, true);
+  assert.equal(gameSession.state.ship.fuel, landedFuel - stationLegFuelCost);
+  assert.match(gameSession.output, /Auto-boarding ship/);
+  gameSession.arrive();
+  assert.equal(gameSession.state.phase2.currentDestination.id, station.id);
+  assert.equal(gameSession.state.phase2.locationStatus, 'landed');
   gameSession.command('board');
   assert.equal(gameSession.state.phase2.locationStatus, 'orbit');
   assert.equal(gameSession.state.currentRoom, 'commandDeck');
@@ -351,9 +355,10 @@ test('mining, exploration, trading, and crafting update resources and report fai
 
   gameSession.state.ship.minerals = 7;
   gameSession.state.ship.hull = 90;
+  const fuelBeforeCraft = gameSession.state.ship.fuel;
   gameSession.command('craft fuel_cell');
   assert.equal(gameSession.state.ship.minerals, 3);
-  assert.equal(gameSession.state.ship.fuel, Math.min(150, 90 - asteroid.fuelCost - station.fuelCost + 24));
+  assert.equal(gameSession.state.ship.fuel, Math.min(spaceSystems.fuelCapacity(gameSession.state.ship), fuelBeforeCraft + 24));
   gameSession.command('craft alloy_patch');
   assert.equal(gameSession.state.ship.minerals, 0);
   assert.equal(gameSession.state.ship.hull, 102);

@@ -146,6 +146,23 @@
     return Math.floor(Math.random() * 4294967296) >>> 0;
   }
 
+  // ── Position helpers ──────────────────────────────────────────────────────
+  const HOME_POSITION = { x: 0, y: 0 };
+
+  function getPlayerPosition(state) {
+    const dest = state.phase2 && state.phase2.currentDestination;
+    if (!dest || dest.x === undefined) return HOME_POSITION;
+    return { x: dest.x, y: dest.y };
+  }
+
+  function fuelFromDistance(dist) {
+    return Math.max(3, Math.round(dist * 0.25 + 6));
+  }
+
+  function timeFromDistance(dist, typeBonus) {
+    return Math.max(10, Math.round(dist * 0.5 + 10 + (typeBonus || 0)));
+  }
+
   function randomInteger(random, min, max) {
     return min + Math.floor(random() * (max - min + 1));
   }
@@ -225,19 +242,29 @@
       const type = typeOrder[index];
       const name = `${prefixes[randomInteger(random, 0, prefixes.length - 1)]} ${index + 1}`;
       const siteSeed = Math.floor(random() * 4294967296) >>> 0;
-      const travelTime = 12 + index * 4 + (type === 'planet' ? 6 : type === 'station' ? 4 : 2) + randomInteger(random, 0, 8);
+      const typeBonus = type === 'planet' ? 6 : type === 'station' ? 4 : 2;
+      const angle = random() * Math.PI * 2;
+      const radius = 15 + index * 10 + randomInteger(random, 0, 8);
+      const x = Math.round(radius * Math.cos(angle));
+      const y = Math.round(radius * Math.sin(angle));
+      const distFromHome = Math.sqrt(x * x + y * y);
+      const fuelCost = fuelFromDistance(distFromHome);
+      const travelTime = timeFromDistance(distFromHome, typeBonus);
       const biome = type === 'planet' ? biomes[randomInteger(random, 0, biomes.length - 1)] : 'none';
       destinations.push({
         id: `${type}-${index + 1}`,
         type,
         name,
+        x,
+        y,
+        visited: false,
         summary: type === 'asteroid'
           ? 'Dense ore field with drift-salvage and hidden mineral seams.'
           : type === 'station'
             ? 'A crowded trade port in a narrow trade lane.'
             : 'A habitable world with unstable weather and deep biomes.',
         hazard: hazards[randomInteger(random, 0, hazards.length - 1)],
-        fuelCost: 8 + index * 3 + randomInteger(random, 0, 4),
+        fuelCost,
         travelTime,
         reward: type === 'asteroid' ? 'ore' : type === 'station' ? 'trade goods' : 'biome samples',
         biome,
@@ -285,7 +312,21 @@
 
   function routeFuelCost(state, destination) {
     const engineLevel = Math.max(1, ((state.ship || {}).upgrades || {}).engine || 1);
-    return Math.max(1, destination.fuelCost - ((engineLevel - 1) * 2));
+    const from = getPlayerPosition(state);
+    const dx = (destination.x || 0) - from.x;
+    const dy = (destination.y || 0) - from.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const baseFuel = fuelFromDistance(dist);
+    return Math.max(1, baseFuel - (engineLevel - 1) * 2);
+  }
+
+  function routeTravelTime(state, destination) {
+    const from = getPlayerPosition(state);
+    const dx = (destination.x || 0) - from.x;
+    const dy = (destination.y || 0) - from.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const typeBonus = destination.type === 'planet' ? 6 : destination.type === 'station' ? 4 : 2;
+    return timeFromDistance(dist, typeBonus);
   }
 
   function startFlight(state, routeId, onArrival) {
@@ -312,14 +353,16 @@
     state.phase2.travelStartedAt = Date.now();
     state.phase2.locationStatus = 'traveling';
 
+    const travelTime = routeTravelTime(state, destination);
+
     if (typeof setTimeout === 'function') {
       setTimeout(() => {
         resolveTravel(state, destination.id);
         if (typeof onArrival === 'function') onArrival(destination);
-      }, destination.travelTime * 1000);
+      }, travelTime * 1000);
     }
 
-    return { traveling: true, routeId: destination.id, fuelCost, ship: state.ship };
+    return { traveling: true, routeId: destination.id, fuelCost, travelTime, ship: state.ship };
   }
 
   function resolveTravel(state, routeId) {
@@ -332,6 +375,7 @@
     state.phase2.currentDestination = destination;
     state.phase2.locationStatus = 'landed';
     state.phase2.activeZone = destination.type === 'planet' ? destination.biome : 'landing bay';
+    destination.visited = true;
     return state.phase2;
   }
 
@@ -404,6 +448,59 @@
     return input.trim().replace(/^to\s+/i, '');
   }
 
+  function discoverNewDestinations(state, count) {
+    count = count || 3;
+    const dest = state.phase2 && state.phase2.currentDestination;
+    const cx = dest ? (dest.x || 0) : 0;
+    const cy = dest ? (dest.y || 0) : 0;
+    const seed = ((state.phase2 && state.phase2.galaxySeed) || 0) + (state.destinations || []).length * 1000;
+    const random = createSeededRandom(seed >>> 0);
+    const types = ['asteroid', 'station', 'planet'];
+    const biomes = ['forest', 'cave', 'ocean'];
+    const prefixes = ['Nova', 'Drift', 'Veil', 'Fracture', 'Deep', 'Outer', 'Rim'];
+    const hazards = ['low', 'medium', 'high'];
+    const newDests = [];
+    for (let i = 0; i < count; i++) {
+      const type = types[randomInteger(random, 0, 2)];
+      const angle = random() * Math.PI * 2;
+      const radius = 20 + randomInteger(random, 0, 30);
+      const x = Math.round(cx + radius * Math.cos(angle));
+      const y = Math.round(cy + radius * Math.sin(angle));
+      const distFromHome = Math.sqrt(x * x + y * y);
+      const typeBonus = type === 'planet' ? 6 : type === 'station' ? 4 : 2;
+      const fuelCost = fuelFromDistance(distFromHome);
+      const travelTime = timeFromDistance(distFromHome, typeBonus);
+      const startIndex = (state.destinations || []).length + i;
+      const siteSeed = Math.floor(random() * 4294967296) >>> 0;
+      const biome = type === 'planet' ? biomes[randomInteger(random, 0, 2)] : 'none';
+      newDests.push({
+        id: type + '-' + (startIndex + 1),
+        type,
+        x,
+        y,
+        visited: false,
+        name: prefixes[randomInteger(random, 0, prefixes.length - 1)] + ' ' + (startIndex + 1),
+        fuelCost,
+        travelTime,
+        hazard: hazards[randomInteger(random, 0, 2)],
+        reward: type === 'asteroid' ? 'ore' : type === 'station' ? 'trade goods' : 'biome samples',
+        biome,
+        legalStatus: type === 'station' ? 'regulated' : 'open',
+        summary: 'A newly charted location on the frontier.',
+        site: type === 'asteroid'
+          ? createAsteroidSite(siteSeed)
+          : type === 'planet'
+            ? createPlanetSite(siteSeed, biome)
+            : createStationSite(siteSeed),
+      });
+    }
+    newDests.forEach(function(d) {
+      (state.destinations = state.destinations || []).push(d);
+      (state.phase2.destinations = state.phase2.destinations || []).push(d);
+    });
+    return newDests;
+  }
+
   return {
     CRAFTING_RECIPES,
     UPGRADE_DEFINITIONS,
@@ -413,6 +510,9 @@
     startFlight,
     resolveTravel,
     routeFuelCost,
+    routeTravelTime,
+    getPlayerPosition,
+    discoverNewDestinations,
     craftItem,
     fuelCapacity,
     hullCapacity,
