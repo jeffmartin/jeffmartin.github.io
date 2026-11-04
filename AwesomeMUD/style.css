@@ -285,6 +285,34 @@ h1 {
   text-transform: uppercase;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.phase2-launch-button {
+  display: none;
+  border: 1px solid rgba(122, 240, 182, 0.55);
+  border-radius: 8px;
+  background: rgba(122, 240, 182, 0.14);
+  color: var(--success);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.phase2-launch-button:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.phase2-launch-button:hover {
+  background: rgba(122, 240, 182, 0.22);
+}
+
 .status-pill.is-danger {
   border-color: rgba(255, 142, 142, 0.7);
   background: rgba(255, 142, 142, 0.16);
@@ -642,6 +670,10 @@ h1 {
 
   .topbar {
     padding: 12px 14px;
+  }
+
+  .phase2-launch-button:not([hidden]) {
+    display: none;
   }
 
   .game-container {

@@ -21,7 +21,7 @@
           Explore the vessel, gather what you can, and bring the ship back online.
         </p>
         <p class="intro-text">
-          Start with <code>take oxygen key</code>, then head north. Movement and interaction attempts use oxygen; hazard rooms warn you when they cost extra.
+          Start with <code>take oxygen key</code>, then head north. Movement and interaction attempts use oxygen; hazard rooms warn you when they cost extra. Oxygen recharges by one action every five seconds.
         </p>
         <button id="start-game-btn" type="button">Begin Mission</button>
       </div>
@@ -40,7 +40,10 @@
           </svg>
           <span class="title-text">Deep Drift</span>
         </h1>
-        <div class="status-pill" id="status-pill">Ready</div>
+        <div class="topbar-actions">
+          <button id="phase2-launch-btn" class="phase2-launch-button" type="button" hidden>Launch Phase 2</button>
+          <div class="status-pill" id="status-pill">Ready</div>
+        </div>
       </header>
 
       <div class="game-container">
@@ -78,6 +81,10 @@
       </div>
     </div>
 
+    <script src="game-world.js"></script>
+    <script src="space-systems.js"></script>
+    <script src="phase1-commands.js"></script>
+    <script src="space-commands.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

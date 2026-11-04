@@ -1,83 +1,43 @@
-const introScreen = document.getElementById('intro-screen');
-const gameShell = document.getElementById('game-shell');
-const startGameBtn = document.getElementById('start-game-btn');
+const hasDocument = typeof document !== 'undefined';
+const gameWorld = typeof module !== 'undefined' && module.exports
+  ? require('./game-world.js')
+  : globalThis.DeepDriftWorld;
+const spaceSystems = typeof module !== 'undefined' && module.exports
+  ? require('./space-systems.js')
+  : globalThis.DeepDriftSpace;
+const phaseOneCommandModule = typeof module !== 'undefined' && module.exports
+  ? require('./phase1-commands.js')
+  : globalThis.DeepDriftPhaseOne;
+const spaceCommandModule = typeof module !== 'undefined' && module.exports
+  ? require('./space-commands.js')
+  : globalThis.DeepDriftSpaceCommands;
+const {
+  rooms,
+  initialRoomItems,
+  MAX_OXYGEN_TURNS,
+  SIDE_QUEST_OXYGEN_REWARD,
+  OXYGEN_RECHARGE_INTERVAL_MS,
+  rechargeOxygen,
+} = gameWorld;
+const {
+  generateGalaxy,
+  createPhase2State,
+  startFlight,
+  resolveTravel,
+  routeFuelCost,
+  craftItem,
+  fuelCapacity,
+  hullCapacity,
+  createProgressionState,
+  awardProgress,
+  normalizeTravelDestination,
+  UPGRADE_DEFINITIONS,
+  upgradeShipSystem,
+} = spaceSystems;
+const { createPhaseOneCommands } = phaseOneCommandModule;
+const { createSpaceCommands } = spaceCommandModule;
 
-function startGame() {
-  document.body.classList.add('game-started');
-  introScreen.hidden = true;
-  gameShell.hidden = false;
-  gameShell.style.display = 'block';
-  inputEl.focus();
-}
-
-startGameBtn.addEventListener('click', startGame);
-
-introScreen.hidden = false;
-gameShell.hidden = true;
-gameShell.style.display = 'none';
-
-const rooms = {
-  airlock: {
-    name: 'Airlock',
-    description:
-      'The outer airlock hums with recycled oxygen and a cold metal smell. A faded star map glows on the wall beside the hatch.',
-    exits: { north: 'dockingBay', east: 'maintenanceCorridor' },
-    items: ['oxygen key'],
-  },
-  dockingBay: {
-    name: 'Docking Bay',
-    description:
-      'A wide bay echoes with the distant chime of customs drones. Cargo crates are bolted to the floor, and a shuttle sits in the far corner.',
-    exits: { south: 'airlock', west: 'habitatRing', east: 'commandDeck' },
-    items: ['fuel cell'],
-  },
-  habitatRing: {
-    name: 'Habitat Ring',
-    description:
-      'The habitat ring is lined with glass domes and sleep pods. A low green light bathes the corridor, making everything feel eerily calm.',
-    exits: { east: 'dockingBay', north: 'observationDeck', south: 'crewQuarters' },
-    items: ['medkit'],
-  },
-  observationDeck: {
-    name: 'Observation Deck',
-    description:
-      'The deck looks out into deep space. Asteroid debris slams against the observation windows as the ship shudders in the dark. A faint distress beacon blinks on an old monitor.',
-    exits: { south: 'habitatRing' },
-    items: [],
-  },
-  commandDeck: {
-    name: 'Command Deck',
-    description:
-      'The bridge is quiet except for the pulse of old control panels and static-filled comms. The ship core status display flickers red.',
-    exits: { west: 'dockingBay', north: 'reactorCore' },
-    items: ['nav console'],
-  },
-  reactorCore: {
-    name: 'Reactor Core',
-    description:
-      'The reactor chamber is a warm, humming cylinder of light. The main core is unstable, and a glowing flux core is mounted in the harness.',
-    exits: { south: 'commandDeck' },
-    items: ['flux core'],
-  },
-  maintenanceCorridor: {
-    name: 'Maintenance',
-    description:
-      'The maintenance corridor is lined with service cabinets, spare parts, and utility pipes. A cracked emergency panel glows beside a sealed access hatch. Sparks flicker from a damaged compartment.',
-    exits: { west: 'airlock' },
-    items: ['repair patch'],
-  },
-  crewQuarters: {
-    name: 'Crew Quarters',
-    description:
-      'Personal quarters are strewn with personal effects and emergency rations. A wall panel displays the crew roster—most names are crossed out. The air feels heavy here.',
-    exits: { north: 'habitatRing' },
-    items: [],
-  },
-};
-
-const MAX_OXYGEN_TURNS = 18;
-const SIDE_QUEST_OXYGEN_REWARD = 4;
-
+const initialPhase2State = createPhase2State();
 const state = {
   currentRoom: 'airlock',
   inventory: [],
@@ -87,1008 +47,693 @@ const state = {
   gameOver: false,
   crewSaved: false,
   systemsRepaired: false,
-  suppliesFound: false,
   generalMessage: '',
+  ship: initialPhase2State.ship,
+  phase2: initialPhase2State.phase2,
+  progression: createProgressionState(),
 };
 
-const outputEl = document.getElementById('game-output');
-const formEl = document.getElementById('command-form');
-const inputEl = document.getElementById('command-input');
-const statusEl = document.getElementById('status-pill');
-const mapDisplayEl = document.getElementById('map-display');
-const mapSvgContainer = document.getElementById('map-svg');
-const mapTextEl = document.getElementById('map-text');
-const mobileNavigationEl = document.getElementById('mobile-navigation');
-const roomActionsEl = document.getElementById('room-actions');
-const mapPanelEl = document.getElementById('map-panel');
-const mobileLayoutQuery = window.matchMedia('(max-width: 680px)');
-let mapPanelUsesMobileLayout = mobileLayoutQuery.matches;
+state.destinations = initialPhase2State.destinations;
 
-function syncMapPanelToViewport() {
-  const usesMobileLayout = window.innerWidth <= 680;
-  if (mapPanelEl && usesMobileLayout !== mapPanelUsesMobileLayout) {
-    mapPanelEl.open = !usesMobileLayout;
-  }
-  mapPanelUsesMobileLayout = usesMobileLayout;
-}
+if (hasDocument) {
+  const introScreen = document.getElementById('intro-screen');
+  const gameShell = document.getElementById('game-shell');
+  const startGameBtn = document.getElementById('start-game-btn');
+  const outputEl = document.getElementById('game-output');
+  const formEl = document.getElementById('command-form');
+  const inputEl = document.getElementById('command-input');
+  const statusEl = document.getElementById('status-pill');
+  const phase2LaunchBtn = document.getElementById('phase2-launch-btn');
+  const mapTextEl = document.getElementById('map-text');
+  const mobileNavigationEl = document.getElementById('mobile-navigation');
+  const roomActionsEl = document.getElementById('room-actions');
+  const mapPanelEl = document.getElementById('map-panel');
+  const mapSvgContainer = document.getElementById('map-svg');
+  const mobileLayoutQuery = window.matchMedia('(max-width: 680px)');
+  let mapPanelUsesMobileLayout = mobileLayoutQuery.matches;
 
-if (mapPanelEl) mapPanelEl.open = !mapPanelUsesMobileLayout;
-window.addEventListener('resize', syncMapPanelToViewport);
-mobileLayoutQuery.addEventListener('change', syncMapPanelToViewport);
-
-// Canvas starfield: draws sparse animated stars for a natural look
-function initStarfield() {
-  const container = document.getElementById('starfield');
-  if (!container) return;
-  // avoid double-init
-  if (container._starCanvas) return;
-
-  const canvas = document.createElement('canvas');
-  container.appendChild(canvas);
-  container._starCanvas = canvas;
-  const ctx = canvas.getContext('2d');
-
-  let DPR = window.devicePixelRatio || 1;
-  function resize() {
-    DPR = window.devicePixelRatio || 1;
-    const w = Math.max(320, Math.floor(window.innerWidth));
-    const h = Math.max(240, Math.floor(window.innerHeight));
-    canvas.width = Math.floor(w * DPR);
-    canvas.height = Math.floor(h * DPR);
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  function appendLine(message, type = 'info') {
+    const line = document.createElement('p');
+    line.className = `output-line ${type}`;
+    line.textContent = message;
+    outputEl.appendChild(line);
+    outputEl.scrollTop = outputEl.scrollHeight;
   }
 
-  const stars = [];
-  const STAR_COUNT = 120;
-  function initStars() {
-    stars.length = 0;
-    for (let i = 0; i < STAR_COUNT; i++) {
-      stars.push({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        r: Math.random() * 1.6 + 0.4,
-        speed: Math.random() * 0.12 + 0.02,
-        phase: Math.random() * Math.PI * 2,
-        alpha: 0.6 + Math.random() * 0.4,
-      });
+  function syncMapPanelToViewport() {
+    const usesMobileLayout = window.innerWidth <= 680;
+    if (usesMobileLayout !== mapPanelUsesMobileLayout) {
+      mapPanelEl.open = !usesMobileLayout;
     }
+    mapPanelUsesMobileLayout = usesMobileLayout;
   }
 
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(64, now - last) / 1000;
-    last = now;
-    const w = canvas.width / DPR;
-    const h = canvas.height / DPR;
-    ctx.clearRect(0, 0, w, h);
-    // subtle nebula tint behind stars
-    ctx.fillStyle = 'rgba(6,18,28,0.06)';
-    ctx.fillRect(0, 0, w, h);
+  function initStarfield() {
+    const container = document.getElementById('starfield');
+    if (!container || container._starCanvas) return;
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    container._starCanvas = canvas;
+    const ctx = canvas.getContext('2d');
+    let DPR = window.devicePixelRatio || 1;
 
-    for (let s of stars) {
-      s.y += s.speed * (50 * dt);
-      if (s.y > h + 10) s.y = -10;
-      // twinkle
-      const tw = 0.5 + 0.5 * Math.sin(now / 400 + s.phase);
-      const a = Math.max(0.2, Math.min(1, s.alpha * tw));
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(255,255,255,${a})`;
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
+    function resize() {
+      DPR = window.devicePixelRatio || 1;
+      const w = Math.max(320, Math.floor(window.innerWidth));
+      const h = Math.max(240, Math.floor(window.innerHeight));
+      canvas.width = Math.floor(w * DPR);
+      canvas.height = Math.floor(h * DPR);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     }
 
+    const stars = [];
+    const STAR_COUNT = 120;
+    function initStars() {
+      stars.length = 0;
+      for (let i = 0; i < STAR_COUNT; i++) {
+        stars.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          r: Math.random() * 1.6 + 0.4,
+          speed: Math.random() * 0.12 + 0.02,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.6 + Math.random() * 0.4,
+        });
+      }
+    }
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(64, now - last) / 1000;
+      last = now;
+      const w = canvas.width / DPR;
+      const h = canvas.height / DPR;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(6,18,28,0.06)';
+      ctx.fillRect(0, 0, w, h);
+
+      for (const s of stars) {
+        s.y += s.speed * (50 * dt);
+        if (s.y > h + 10) s.y = -10;
+        const tw = 0.5 + 0.5 * Math.sin(now / 400 + s.phase);
+        const a = Math.max(0.2, Math.min(1, s.alpha * tw));
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('resize', () => {
+      resize();
+      initStars();
+    });
+
+    resize();
+    initStars();
     requestAnimationFrame(frame);
   }
 
-  window.addEventListener('resize', () => {
-    resize();
-    initStars();
-  });
-
-  resize();
-  initStars();
-  requestAnimationFrame(frame);
-}
-
-// initialize starfield immediately (script is loaded at end of body)
-initStarfield();
-
-function appendLine(message, type = 'info') {
-  const line = document.createElement('p');
-  line.className = `output-line ${type}`;
-  line.textContent = message;
-  outputEl.appendChild(line);
-  outputEl.scrollTop = outputEl.scrollHeight;
-}
-
-function updateMapDisplay() {
-  const mapContent = [];
-  
-  // Items section
-  mapContent.push('INVENTORY:');
-  const itemLocations = [
-    { item: 'oxygen key', location: 'Airlock' },
-    { item: 'fuel cell', location: 'Docking Bay' },
-    { item: 'medkit', location: 'Habitat Ring' },
-    { item: 'repair patch', location: 'Maint. Corr.' },
-    { item: 'flux core', location: 'Reactor Core' },
-  ];
-  
-  itemLocations.forEach((entry) => {
-    const inInventory = state.inventory.some((item) => 
-      item.toLowerCase() === entry.item.toLowerCase()
-    );
-    const indicator = inInventory ? '✓' : '○';
-    const label = inInventory ? entry.item : entry.item;
-    mapContent.push(`${indicator} ${label}`);
-  });
-  
-  mapContent.push('');
-  mapContent.push('OBJECTIVES:');
-  const objectives = [
-    { task: 'Get Flux Core', done: state.inventory.some((item) => item.toLowerCase() === 'flux core') },
-    { task: 'Reach Cmd Deck', done: state.currentRoom === 'commandDeck' },
-    { task: 'Win Mission', done: state.gameWon },
-    { task: 'Save Crew', done: state.crewSaved },
-    { task: 'Repair Ship', done: state.systemsRepaired },
-  ];
-  
-  objectives.forEach((obj) => {
-    const check = obj.done ? '✓' : '○';
-    mapContent.push(`${check} ${obj.task}`);
-  });
-  
-  mapContent.push('');
-  mapContent.push(`CURRENT: ${rooms[state.currentRoom]?.name || 'Unknown'}`);
-  mapContent.push(`INVENTORY: ${state.inventory.length} items`);
-  
-  if (mapTextEl) mapTextEl.textContent = mapContent.join('\n');
-}
-
-function updateMobileNavigation() {
-  if (!mobileNavigationEl) return;
-  mobileNavigationEl.replaceChildren();
-
-  Object.entries(rooms[state.currentRoom].exits || {}).forEach(([direction, destination]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'navigation-button';
-    button.dataset.direction = direction;
-    button.textContent = direction;
-    button.setAttribute('aria-label', `Go ${direction} to ${rooms[destination].name}`);
-    button.addEventListener('click', () => parseCommand(direction));
-    mobileNavigationEl.appendChild(button);
-  });
-}
-
-function updateRoomActions() {
-  if (!roomActionsEl) return;
-  roomActionsEl.replaceChildren();
-  if (state.gameWon || state.gameOver) return;
-
-  const room = rooms[state.currentRoom];
-  const actions = room.items.map((item) => ({ label: `Take ${item}`, command: `take ${item}` }));
-  const examinationTargets = {
-    dockingBay: 'shuttle',
-    observationDeck: 'beacon',
-    crewQuarters: 'roster',
-    commandDeck: 'console',
-    reactorCore: 'core',
-  };
-  const examinationTarget = examinationTargets[state.currentRoom];
-  if (examinationTarget) {
-    actions.push({ label: `Examine ${examinationTarget}`, command: `examine ${examinationTarget}` });
+  function statusText() {
+    const frontierBadge = state.progression && state.progression.rank ? ` | ${state.progression.rank}` : '';
+    statusEl.textContent = state.gameWon ? 'Mission Complete' : state.gameOver ? 'No Oxygen' : `O2 ${state.oxygenTurns}/${oxygenCapacity()}${frontierBadge}`;
+    statusEl.classList.toggle('is-danger', state.gameOver);
+    statusEl.classList.toggle('is-success', state.gameWon);
   }
 
-  const usableItems = {
-    airlock: 'oxygen key',
-    dockingBay: 'fuel cell',
-    observationDeck: 'medkit',
-    maintenanceCorridor: 'repair patch',
-    commandDeck: 'flux core',
-  };
-  const usableItem = state.currentRoom === 'observationDeck' && state.crewSaved
-    ? null
-    : usableItems[state.currentRoom];
-  if (usableItem && state.inventory.some((item) => item.toLowerCase() === usableItem)) {
-    actions.push({ label: `Use ${usableItem}`, command: `use ${usableItem}` });
+  function oxygenCapacity() {
+    return MAX_OXYGEN_TURNS + (state.crewSaved ? SIDE_QUEST_OXYGEN_REWARD : 0) + (state.systemsRepaired ? SIDE_QUEST_OXYGEN_REWARD : 0);
   }
 
-  actions.forEach((action) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'room-action-button';
-    button.textContent = action.label;
-    button.addEventListener('click', () => parseCommand(action.command));
-    roomActionsEl.appendChild(button);
-  });
-}
+  function updateMapDisplay() {
+    const mapContent = [];
+    mapContent.push('INVENTORY:');
+    for (const entry of [
+      { item: 'oxygen key', location: 'Airlock' },
+      { item: 'fuel cell', location: 'Docking Bay' },
+      { item: 'medkit', location: 'Habitat Ring' },
+      { item: 'emergency rations', location: 'Crew Quarters' },
+      { item: 'repair patch', location: 'Maint. Corr.' },
+      { item: 'flux core', location: 'Reactor Core' },
+    ]) {
+      const inInventory = state.inventory.some((item) => item.toLowerCase() === entry.item.toLowerCase());
+      const indicator = inInventory ? '✓' : '○';
+      mapContent.push(`${indicator} ${entry.item}`);
+    }
+    mapContent.push('');
+    mapContent.push('OBJECTIVES:');
+    mapContent.push(`${state.inventory.some((item) => item.toLowerCase() === 'flux core') ? '✓' : '○'} Get Flux Core`);
+    mapContent.push(`${state.currentRoom === 'commandDeck' ? '✓' : '○'} Reach Cmd Deck`);
+    mapContent.push(`${state.gameWon ? '✓' : '○'} Win Mission`);
+    mapContent.push(`${state.crewSaved ? '✓' : '○'} Save Crew`);
+    mapContent.push(`${state.systemsRepaired ? '✓' : '○'} Repair Ship`);
+    mapContent.push('');
+    mapContent.push(`CURRENT: ${rooms[state.currentRoom].name}`);
+    mapTextEl.textContent = mapContent.join('\n');
+  }
 
-// Positions for SVG map nodes (x,y in 0..100 coordinate space)
-const roomPositions = {
-  // Core & bridge area (north is smaller y)
-  reactorCore: { x: 50, y: 8 },
-  commandDeck: { x: 50, y: 28 },
-
-  // Docking should be west of commandDeck
-  dockingBay: { x: 34, y: 44 },
-  // Airlock sits south of docking
-  airlock: { x: 34, y: 70 },
-
-  // Habitat cluster further west of docking
-  habitatRing: { x: 18, y: 44 },
-  observationDeck: { x: 18, y: 28 },
-  crewQuarters: { x: 18, y: 70 },
-
-  // Maintenance corridor off the airlock (east of airlock)
-  maintenanceCorridor: { x: 50, y: 70 },
-};
-
-function renderSvgMap() {
-  if (!mapSvgContainer) return;
-  mapSvgContainer.innerHTML = '';
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('viewBox', '0 0 100 100');
-  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-  // draw edges (only once per pair)
-  const seen = new Set();
-  Object.keys(rooms).forEach((key) => {
-    const pos = roomPositions[key];
-    if (!pos) return;
-    const exits = rooms[key].exits || {};
-    Object.values(exits).forEach((dest) => {
-      const pair = [key, dest].sort().join('|');
-      if (seen.has(pair)) return;
-      seen.add(pair);
-      const dpos = roomPositions[dest];
-      if (!dpos) return;
-      // use coordinates directly (y: 0..100, 0 = top). Smaller y means more north (up).
-      const y1 = pos.y;
-      const y2 = dpos.y;
-      const line = document.createElementNS(svgNS, 'line');
-      line.setAttribute('x1', pos.x);
-      line.setAttribute('y1', y1);
-      line.setAttribute('x2', dpos.x);
-      line.setAttribute('y2', y2);
-      line.setAttribute('class', 'map-edge');
-      svg.appendChild(line);
+  function updateMobileNavigation() {
+    if (!mobileNavigationEl) return;
+    mobileNavigationEl.replaceChildren();
+    Object.entries(rooms[state.currentRoom].exits || {}).forEach(([direction, destination]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'navigation-button';
+      button.dataset.direction = direction;
+      button.textContent = direction;
+      button.addEventListener('click', () => parseCommand(direction));
+      mobileNavigationEl.appendChild(button);
     });
-  });
+  }
 
-  // draw nodes
-  Object.keys(roomPositions).forEach((key) => {
-    const p = roomPositions[key];
-    const g = document.createElementNS(svgNS, 'g');
-    g.setAttribute('class', `map-node map-node-${key}`);
-    g.setAttribute('data-room', key);
-    // use coordinates directly (y increases downward in SVG; smaller y values are visually higher)
-    const py = p.y;
-    g.setAttribute('transform', `translate(${p.x}, ${py})`);
-
-    const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('cx', 0);
-    circle.setAttribute('cy', 0);
-    circle.setAttribute('r', 1.8);
-    g.appendChild(circle);
-
-    const label = document.createElementNS(svgNS, 'text');
-    const fullName = rooms[key].name || key;
-    // Position labels to avoid overlap: prefer left/right depending on node X
-    const offsetX = p.x > 70 ? -4 : (p.x < 30 ? 6 : 6);
-    const anchor = p.x > 70 ? 'end' : 'start';
-    // Nudges vertical label position if node is very top or very bottom
-    const offsetY = p.y < 12 ? 6 : (p.y > 85 ? -6 : 3);
-    label.setAttribute('x', offsetX);
-    label.setAttribute('y', offsetY);
-    label.setAttribute('text-anchor', anchor);
-    label.setAttribute('class', 'map-label');
-    // Shorten long labels visually; full name available as tooltip
-    label.textContent = fullName.length > 18 ? fullName.slice(0, 15) + '…' : fullName;
-    const title = document.createElementNS(svgNS, 'title');
-    title.textContent = fullName;
-    g.appendChild(title);
-    g.appendChild(label);
-
-    // clickable to attempt move
-    g.addEventListener('click', (e) => {
-      e.stopPropagation();
-      moveToRoom(key);
-    });
-
-    svg.appendChild(g);
-  });
-
-  mapSvgContainer.appendChild(svg);
-  updateSvgHighlight();
-
-  // Simple overlap resolver: nudge overlapping labels apart (few iterations)
-  try {
-    const labels = Array.from(svg.querySelectorAll('.map-label'));
-    let iter = 0;
-    let changed = true;
-    while (changed && iter < 6) {
-      changed = false;
-      iter++;
-      for (let i = 0; i < labels.length; i++) {
-        for (let j = i + 1; j < labels.length; j++) {
-          const a = labels[i].getBBox();
-          const b = labels[j].getBBox();
-          if (!(a.x + a.width < b.x || b.x + b.width < a.x || a.y + a.height < b.y || b.y + b.height < a.y)) {
-            const yi = parseFloat(labels[i].getAttribute('y') || '0');
-            const yj = parseFloat(labels[j].getAttribute('y') || '0');
-            const delta = 3;
-            if (yi <= yj) {
-              labels[i].setAttribute('y', yi - delta);
-              labels[j].setAttribute('y', yj + delta);
-            } else {
-              labels[i].setAttribute('y', yi + delta);
-              labels[j].setAttribute('y', yj - delta);
-            }
-            changed = true;
-          }
-        }
+  function updateRoomActions() {
+    if (!roomActionsEl) return;
+    roomActionsEl.replaceChildren();
+    if (phase2LaunchBtn) phase2LaunchBtn.hidden = !state.gameWon;
+    if (state.gameOver) {
+      const destination = state.phase2.currentDestination;
+      const cargoHasRations = (state.ship.cargo || []).some((item) => item.toLowerCase() === 'survival pack' || item.toLowerCase() === 'emergency rations');
+      const inventoryHasRations = state.inventory.some((item) => item.toLowerCase() === 'emergency rations');
+      if (state.ship.supplies > 0 || cargoHasRations || inventoryHasRations) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'room-action-button';
+        const command = state.ship.supplies > 0 ? 'use survival pack' : 'use emergency rations';
+        button.textContent = state.ship.supplies > 0 ? 'Use Survival Pack' : 'Use Emergency Rations';
+        button.addEventListener('click', () => parseCommand(command));
+        roomActionsEl.appendChild(button);
       }
-    }
-  } catch (e) {
-    console.warn('Label collision resolver skipped:', e);
-  }
-}
-
-function updateSvgHighlight() {
-  if (!mapSvgContainer) return;
-  const svg = mapSvgContainer.querySelector('svg');
-  if (!svg) return;
-  svg.querySelectorAll('.map-node').forEach((n) => n.classList.remove('current'));
-  const currentNode = svg.querySelector(`.map-node-${state.currentRoom}`);
-  if (currentNode) currentNode.classList.add('current');
-
-  // update external current-room label (outside the SVG)
-  const outer = document.getElementById('map-current-name');
-  if (outer) {
-    const name = (rooms[state.currentRoom] && rooms[state.currentRoom].name) || state.currentRoom;
-    outer.textContent = name;
-  }
-}
-
-function moveToRoom(targetKey) {
-  const room = rooms[state.currentRoom];
-  const exit = Object.entries(room.exits || {}).find(([, destination]) => destination === targetKey);
-  if (exit) parseCommand(exit[0]);
-  else appendLine('You cannot reach that location directly from here.', 'warning');
-}
-
-function roomDescription() {
-  const current = rooms[state.currentRoom];
-  const exits = Object.keys(current.exits);
-  const items = current.items.length ? `Items here: ${current.items.join(', ')}.` : 'No items visible.';
-  appendLine(`\n${current.name}: ${current.description}`, 'info');
-  if (state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired) {
-    appendLine('A sharp hiss cuts through the air from the leaking conduit.', 'warning');
-  }
-  if (state.currentRoom === 'observationDeck' && !state.crewSaved) {
-    appendLine('Asteroid debris batters the windows. Actions here cost 2 oxygen until Dr. Chen guides you through the impact zone.', 'warning');
-  }
-  appendLine(items, 'info');
-  appendLine(`Exits: ${exits.join(', ') || 'none'}.`, 'system');
-}
-
-function statusText() {
-  statusEl.textContent = state.gameWon
-    ? 'Mission Complete'
-    : state.gameOver
-      ? 'No Oxygen'
-      : `O2 ${state.oxygenTurns}/${oxygenCapacity()}`;
-  statusEl.classList.toggle('is-danger', state.gameOver);
-  statusEl.classList.toggle('is-success', state.gameWon);
-}
-
-function oxygenCapacity() {
-  return MAX_OXYGEN_TURNS + (state.crewSaved ? SIDE_QUEST_OXYGEN_REWARD : 0) + (state.systemsRepaired ? SIDE_QUEST_OXYGEN_REWARD : 0);
-}
-
-function saveGame() {
-  const payload = {
-    currentRoom: state.currentRoom,
-    inventory: state.inventory,
-    visited: [...state.visited],
-    oxygenTurns: state.oxygenTurns,
-    gameWon: state.gameWon,
-    gameOver: state.gameOver,
-    crewSaved: state.crewSaved,
-    systemsRepaired: state.systemsRepaired,
-  };
-  localStorage.setItem('deep-drift-save', JSON.stringify(payload));
-  appendLine('Progress saved.', 'system');
-}
-
-function loadGame() {
-  const saved = localStorage.getItem('deep-drift-save');
-  if (!saved) {
-    appendLine('No saved progress found.', 'warning');
-    return;
-  }
-
-  try {
-    const parsed = JSON.parse(saved);
-    state.currentRoom = parsed.currentRoom || 'airlock';
-    state.inventory = parsed.inventory || [];
-    state.visited = new Set(parsed.visited || ['airlock']);
-    state.gameWon = Boolean(parsed.gameWon);
-    state.crewSaved = Boolean(parsed.crewSaved);
-    state.systemsRepaired = Boolean(parsed.systemsRepaired);
-    state.oxygenTurns = Number.isFinite(parsed.oxygenTurns)
-      ? Math.max(0, Math.min(oxygenCapacity(), parsed.oxygenTurns))
-      : MAX_OXYGEN_TURNS;
-    state.gameOver = Boolean(parsed.gameOver) || (state.oxygenTurns === 0 && !state.gameWon);
-    appendLine('Saved progress restored.', 'system');
-    renderRoom();
-    updateSvgHighlight();
-  } catch (error) {
-    appendLine('Could not load saved game.', 'warning');
-  }
-}
-
-function resetGame() {
-  state.currentRoom = 'airlock';
-  state.inventory = [];
-  state.visited = new Set(['airlock']);
-  state.oxygenTurns = MAX_OXYGEN_TURNS;
-  state.gameWon = false;
-  state.gameOver = false;
-  state.crewSaved = false;
-  state.systemsRepaired = false;
-  localStorage.removeItem('deep-drift-save');
-  appendLine('A fresh mission begins.', 'system');
-  renderRoom();
-  updateSvgHighlight();
-}
-
-function renderRoom() {
-  const room = rooms[state.currentRoom];
-  if (!room) {
-    appendLine('You drift into empty space. Nothing is here.', 'warning');
-    return;
-  }
-
-  state.visited.add(state.currentRoom);
-  roomDescription();
-  statusText();
-  updateMapDisplay();
-  updateSvgHighlight();
-  updateMobileNavigation();
-  updateRoomActions();
-}
-
-// Victory celebration: banner, confetti canvas, and chime
-function celebrateVictory(endingTitle) {
-  try {
-    // audio chime (simple chord)
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (AudioCtx) {
-      const ctx = new AudioCtx();
-      const t = ctx.currentTime;
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc1.type = 'sine';
-      osc2.type = 'sine';
-      osc1.frequency.setValueAtTime(440, t);
-      osc2.frequency.setValueAtTime(660, t);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
-      osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination);
-      osc1.start(t); osc2.start(t);
-      osc1.stop(t + 1.6); osc2.stop(t + 1.6);
-    }
-  } catch (e) {
-    console.warn('Audio not available for victory chime', e);
-  }
-
-  // banner
-  const existing = document.querySelector('.victory-banner');
-  if (!existing) {
-    const banner = document.createElement('div');
-    banner.className = 'victory-banner';
-    banner.textContent = endingTitle;
-    document.body.appendChild(banner);
-    setTimeout(() => {
-      banner.style.transition = 'opacity 600ms ease, transform 600ms ease';
-      banner.style.opacity = '0';
-      banner.style.transform = 'translateX(-50%) scale(0.9)';
-      setTimeout(() => banner.remove(), 7000);
-    }, 3800);
-  }
-
-  // confetti canvas
-  const existingCanvas = document.querySelector('.confetti-canvas');
-  if (existingCanvas) return;
-  const cvs = document.createElement('canvas');
-  cvs.className = 'confetti-canvas';
-  cvs.width = window.innerWidth;
-  cvs.height = window.innerHeight;
-  document.body.appendChild(cvs);
-  const cctx = cvs.getContext('2d');
-  const confetti = [];
-  const COUNT = 140;
-  const colors = ['#7af0b6', '#7ee7ff', '#ffd36e', '#ff8e8e', '#b4ffea'];
-  for (let i = 0; i < COUNT; i++) {
-    confetti.push({
-      x: Math.random() * cvs.width,
-      y: Math.random() * cvs.height - cvs.height,
-      w: 6 + Math.random() * 8,
-      h: 6 + Math.random() * 8,
-      vx: Math.random() * 200 - 100,
-      vy: 40 + Math.random() * 160,
-      rot: Math.random() * Math.PI * 2,
-      vr: (Math.random() - 0.5) * 0.2,
-      color: colors[Math.floor(Math.random() * colors.length)],
-    });
-  }
-
-  let lastTime = performance.now();
-  function confettiFrame(now) {
-    const dt = Math.min(64, now - lastTime) / 1000;
-    lastTime = now;
-    cctx.clearRect(0, 0, cvs.width, cvs.height);
-    for (const p of confetti) {
-      p.x += p.vx * dt * 0.2;
-      p.y += p.vy * dt;
-      p.vy += 40 * dt; // gravity
-      p.rot += p.vr;
-      cctx.save();
-      cctx.translate(p.x, p.y);
-      cctx.rotate(p.rot);
-      cctx.fillStyle = p.color;
-      cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
-      cctx.restore();
-    }
-    // stop after duration
-    if (performance.now() - startTime > 8000) {
-      cvs.remove();
+      if (state.phase2.locationStatus === 'landed' && destination && ['station', 'planet'].includes(destination.type)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'room-action-button';
+        button.textContent = 'Buy Oxygen';
+        button.addEventListener('click', () => parseCommand('trade buy oxygen'));
+        roomActionsEl.appendChild(button);
+      }
       return;
     }
-    requestAnimationFrame(confettiFrame);
-  }
-  const startTime = performance.now();
-  requestAnimationFrame(confettiFrame);
 
-  // highlight title briefly
-  const titleEl = document.querySelector('.title-text');
-  if (titleEl) {
-    titleEl.classList.add('title-victory');
-    setTimeout(() => titleEl.classList.remove('title-victory'), 4400);
-  }
-}
+    const actions = rooms[state.currentRoom].items.map((item) => ({ label: `Take ${item}`, command: `take ${item}` }));
+    if (state.currentRoom === 'commandDeck') {
+      actions.push({ label: state.gameWon ? 'Launch Phase 2' : 'Flight Console', command: 'flight' });
+      actions.push({ label: 'Ship Status', command: 'ship' });
+      actions.push({ label: 'Ship Modules', command: 'modules' });
+    }
+    if (state.ship.supplies > 0) {
+      actions.push({ label: 'Use Survival Pack', command: 'use survival pack' });
+    } else if ((state.ship.cargo || []).some((item) => item.toLowerCase() === 'survival pack' || item.toLowerCase() === 'emergency rations')) {
+      actions.push({ label: 'Use Emergency Rations', command: 'use emergency rations' });
+    }
+    const examinationTargets = {
+      dockingBay: 'shuttle',
+      observationDeck: 'beacon',
+      crewQuarters: 'roster',
+      commandDeck: 'console',
+      reactorCore: 'core',
+    };
+    if (examinationTargets[state.currentRoom]) {
+      actions.push({ label: `Examine ${examinationTargets[state.currentRoom]}`, command: `examine ${examinationTargets[state.currentRoom]}` });
+    }
+    const usableItems = {
+      airlock: 'oxygen key',
+      dockingBay: 'fuel cell',
+      observationDeck: 'medkit',
+      maintenanceCorridor: 'repair patch',
+      crewQuarters: 'emergency rations',
+      commandDeck: 'flux core',
+    };
+    const usableItem = state.currentRoom === 'observationDeck' && state.crewSaved
+      ? null
+      : state.currentRoom === 'maintenanceCorridor' && state.systemsRepaired
+        ? null
+        : usableItems[state.currentRoom];
+    if (usableItem && state.inventory.some((item) => item.toLowerCase() === usableItem)) {
+      actions.push({ label: `Use ${usableItem}`, command: `use ${usableItem}` });
+    }
+    if (state.phase2.currentDestination && state.phase2.locationStatus === 'landed') {
+      actions.push({ label: 'Explore Site', command: 'explore' });
+      actions.push({ label: 'Mine', command: 'mine' });
+      actions.push({ label: 'Trade', command: 'trade list' });
+      if (['station', 'planet'].includes(state.phase2.currentDestination.type)) {
+        actions.push({ label: 'Buy Oxygen', command: 'trade buy oxygen' });
+      }
+      actions.push({ label: 'Board Ship', command: 'board' });
+    } else if (state.phase2.currentDestination && state.phase2.locationStatus === 'orbit') {
+      actions.push({ label: 'Land at Site', command: 'land' });
+    }
+    if (state.phase2.travelling) {
+      actions.push({ label: 'Craft', command: 'craft fuel_cell' });
+      actions.push({ label: 'Ship Status', command: 'ship' });
+      actions.push({ label: 'Inspect Modules', command: 'modules' });
+    }
 
-function getDirectionAlias(input) {
-  const aliases = {
-    n: 'north',
-    s: 'south',
-    e: 'east',
-    w: 'west',
-    north: 'north',
-    south: 'south',
-    east: 'east',
-    west: 'west',
-    go: null,
+    actions.forEach((action) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'room-action-button';
+      button.textContent = action.label;
+      button.addEventListener('click', () => parseCommand(action.command));
+      roomActionsEl.appendChild(button);
+    });
+  }
+
+  const roomPositions = {
+    reactorCore: { x: 50, y: 8 },
+    commandDeck: { x: 50, y: 28 },
+    dockingBay: { x: 34, y: 44 },
+    airlock: { x: 34, y: 70 },
+    habitatRing: { x: 18, y: 44 },
+    observationDeck: { x: 18, y: 28 },
+    crewQuarters: { x: 18, y: 70 },
+    maintenanceCorridor: { x: 50, y: 70 },
   };
 
-  return aliases[input] || input;
-}
+  function renderSvgMap() {
+    if (!mapSvgContainer) return;
+    mapSvgContainer.innerHTML = '';
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-function handleLook() {
-  renderRoom();
-}
+    const seen = new Set();
+    Object.keys(rooms).forEach((key) => {
+      const pos = roomPositions[key];
+      if (!pos) return;
+      Object.values(rooms[key].exits || {}).forEach((dest) => {
+        const pair = [key, dest].sort().join('|');
+        if (seen.has(pair)) return;
+        seen.add(pair);
+        const dpos = roomPositions[dest];
+        if (!dpos) return;
+        const line = document.createElementNS(svgNS, 'line');
+        line.setAttribute('x1', pos.x);
+        line.setAttribute('y1', pos.y);
+        line.setAttribute('x2', dpos.x);
+        line.setAttribute('y2', dpos.y);
+        line.setAttribute('class', 'map-edge');
+        svg.appendChild(line);
+      });
+    });
 
-function handleInventory() {
-  const items = state.inventory.length ? state.inventory.join(', ') : 'empty';
-  appendLine(`Inventory: ${items}.`, 'system');
-}
+    Object.keys(roomPositions).forEach((key) => {
+      const p = roomPositions[key];
+      const g = document.createElementNS(svgNS, 'g');
+      g.setAttribute('class', `map-node map-node-${key}`);
+      g.setAttribute('transform', `translate(${p.x}, ${p.y})`);
+      const circle = document.createElementNS(svgNS, 'circle');
+      circle.setAttribute('cx', 0);
+      circle.setAttribute('cy', 0);
+      circle.setAttribute('r', 1.8);
+      g.appendChild(circle);
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', p.x > 70 ? -4 : 6);
+      label.setAttribute('y', p.y < 12 ? 6 : (p.y > 85 ? -6 : 3));
+      label.setAttribute('class', 'map-label');
+      label.textContent = rooms[key].name;
+      g.appendChild(label);
+      svg.appendChild(g);
+    });
 
-function handleTake(itemName) {
-  const room = rooms[state.currentRoom];
-  if (!itemName) {
-    appendLine('Take what?', 'warning');
-    return false;
+    mapSvgContainer.appendChild(svg);
+    svg.querySelectorAll('.map-node').forEach((node) => node.classList.remove('current'));
+    const currentNode = svg.querySelector(`.map-node-${state.currentRoom}`);
+    if (currentNode) currentNode.classList.add('current');
   }
 
-  const item = room.items.find((entry) => entry.toLowerCase() === itemName.toLowerCase());
-  if (!item) {
-    appendLine(`You do not see a ${itemName} here.`, 'warning');
-    return false;
-  }
-
-  room.items = room.items.filter((entry) => entry !== item);
-  state.inventory.push(item);
-  appendLine(`You take the ${item}.`, 'system');
-  updateMapDisplay();
-  return true;
-}
-
-function handleUse(itemName) {
-  if (!itemName) {
-    appendLine('Use what?', 'warning');
-    return false;
-  }
-
-  const normalized = itemName.toLowerCase();
-  const inInventory = state.inventory.some((item) => item.toLowerCase() === normalized);
-
-  // Win condition: flux core at command deck
-  if (state.currentRoom === 'commandDeck' && normalized === 'flux core') {
-    if (!inInventory) {
-      appendLine('You need the flux core before you can stabilize the ship.', 'warning');
-      return false;
+  function roomDescription() {
+    const current = rooms[state.currentRoom];
+    const exits = Object.keys(current.exits);
+    const items = current.items.length ? `Items here: ${current.items.join(', ')}.` : 'No items visible.';
+    appendLine(`\n${current.name}: ${current.description}`, 'info');
+    if (state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired) {
+      appendLine('A sharp hiss cuts through the air from the leaking conduit.', 'warning');
     }
+    if (state.currentRoom === 'observationDeck' && !state.crewSaved) {
+      appendLine('Asteroid debris batters the windows. Actions here cost 2 oxygen until Dr. Chen guides you through the impact zone.', 'warning');
+    }
+    if (state.currentRoom === 'commandDeck') {
+      const routeStatus = !state.gameWon
+        ? 'The reactor is offline. Restore the flux core to repair the ship and unlock Phase 2 travel.'
+        : state.phase2.travelling
+        ? `The ship is already in transit to ${state.phase2.currentDestination ? state.phase2.currentDestination.name : 'its destination'}.`
+        : 'The route network is ready. Type "flight" to view destinations or "travel to <name>" to launch.';
+      appendLine(`Command deck flight interface active. ${routeStatus}`, 'system');
+    }
+    appendLine(items, 'info');
+    appendLine(`Exits: ${exits.join(', ') || 'none'}.`, 'system');
+  }
 
-    state.gameWon = true;
-    state.inventory = state.inventory.filter((item) => item.toLowerCase() !== 'flux core');
-    const ending = getMissionEnding();
+  function renderRoom() {
+    const room = rooms[state.currentRoom];
+    if (!room) return;
+    state.visited.add(state.currentRoom);
+    roomDescription();
     statusText();
-    appendLine('You slot the flux core into the nav console. The reactor catches and the ship comes back online.', 'system');
-    appendLine(`${ending.title}: ${ending.description}`, 'success');
     updateMapDisplay();
-    celebrateVictory(ending.title);
-    return true;
+    renderSvgMap();
+    updateMobileNavigation();
+    updateRoomActions();
   }
 
-  // Oxygen key at airlock
-  if (state.currentRoom === 'airlock' && normalized === 'oxygen key') {
-    if (!inInventory) {
-      appendLine('You do not have an oxygen key.', 'warning');
-      return false;
-    }
-    appendLine('You unlock the emergency supply locker with the oxygen key. Inside, you find ration packs and technical manuals.', 'system');
-    appendLine('They won\'t help you leave, but they confirm others were here before.', 'info');
-    return true;
+  function handleMap() {
+    appendLine('Voyage Data:', 'system');
+    appendLine('Deep Drift, still under repair; local route network is active.', 'info');
   }
 
-  // Fuel cell at docking bay
-  if (state.currentRoom === 'dockingBay' && normalized === 'fuel cell') {
-    if (!inInventory) {
-      appendLine('You do not have a fuel cell.', 'warning');
-      return false;
-    }
-    appendLine('You insert the fuel cell into the shuttle\'s auxiliary power port. The shuttle\'s lights flicker to life.', 'system');
-    appendLine('It\'s not enough to launch, but you can access the flight logs now. The last entry reads: "Reactor critical. All hands to emergency stations."', 'info');
-    return true;
-  }
-
-  // Medkit at observation deck (to help distressed crew)
-  if (state.currentRoom === 'observationDeck' && normalized === 'medkit') {
-    if (!inInventory) {
-      appendLine('You do not have a medkit.', 'warning');
-      return false;
-    }
-    if (state.crewSaved) {
-      appendLine('There is no one left to help here.', 'info');
-      return false;
-    }
-    appendLine('You respond to the distress signal. Dr. Chen\'s voice crackles through the comm, weakened but alive.', 'system');
-    appendLine('"Thank... thank you. I\'m in the med bay. The reactor overload... I managed to seal it. Flux core is... in the core chamber."', 'info');
-    appendLine('You have saved a crew member and learned the reactor location. The mission suddenly feels less lonely.', 'system');
-    appendLine('Dr. Chen guides you through the debris field, clearing the extra oxygen cost here.', 'success');
-    state.crewSaved = true;
-    state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
-    appendLine(`Dr. Chen shares emergency oxygen: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
-    updateMapDisplay();
-    return true;
-  }
-
-  // Repair patch in maintenance corridor
-  if (state.currentRoom === 'maintenanceCorridor' && normalized === 'repair patch') {
-    if (!inInventory) {
-      appendLine('You do not have a repair patch.', 'warning');
-      return false;
-    }
-    if (state.systemsRepaired) {
-      appendLine('The systems are already repaired. There\'s nothing more to fix here.', 'info');
-      return false;
-    }
-    appendLine('You apply the repair patch to the damaged power conduit. Sparks stop flying and the panel stabilizes.', 'system');
-    appendLine('The ship\'s secondary systems come back online. Life support is now at 87%.', 'info');
-    state.systemsRepaired = true;
-    state.oxygenTurns += SIDE_QUEST_OXYGEN_REWARD;
-    appendLine(`Restored life support expands your oxygen reserve: +${SIDE_QUEST_OXYGEN_REWARD} actions.`, 'success');
-    updateMapDisplay();
-    return true;
-  }
-
-  if (inInventory) {
-    appendLine(`You try to use the ${itemName}, but there's nothing here to use it on.`, 'info');
-    return false;
-  }
-
-  appendLine(`You do not have a ${itemName}.`, 'warning');
-  return false;
-}
-
-function getMissionEnding() {
-  if (state.crewSaved && state.systemsRepaired) {
-    return {
-      title: 'Rescue Beacon',
-      description: 'Dr. Chen joins you on the bridge. With life support restored, the Deep Drift returns home and broadcasts a signal for any other survivors.',
-    };
-  }
-
-  if (state.crewSaved) {
-    return {
-      title: 'Last-Minute Evacuation',
-      description: 'Dr. Chen guides you toward home, but failing life support forces an evacuation at the nearest station.',
-    };
-  }
-
-  if (state.systemsRepaired) {
-    return {
-      title: 'Silent Homecoming',
-      description: 'Life support holds and the ship reaches home, but Dr. Chen never answers. You leave a beacon active for anyone still out there.',
-    };
-  }
-
-  return {
-    title: 'Fragile Return',
-    description: 'The ship begins the long trip home on failing life support, leaving the distress signal unanswered.',
-  };
-}
-
-function handleMove(direction) {
-  const room = rooms[state.currentRoom];
-  const target = room.exits[direction];
-
-  if (!target) {
-    appendLine(`You cannot go ${direction} from here.`, 'warning');
-    return false;
-  }
-
-  state.currentRoom = target;
-  appendLine(`You move ${direction}.`, 'system');
-  if (target === 'maintenanceCorridor' && !state.systemsRepaired) {
-    appendLine('Warning: a pressure leak is draining oxygen fast. Actions in Maintenance cost 2 oxygen until repaired.', 'warning');
-  }
-  if (target === 'observationDeck' && !state.crewSaved) {
-    appendLine('Warning: asteroid debris is striking the observation windows. Actions here cost 2 oxygen until Dr. Chen guides you through the impact zone.', 'warning');
-  }
-  renderRoom();
-  return true;
-}
-
-function handleHelp() {
-  appendLine('Commands: look, inventory, take <item>, use <item>, go <direction>, examine <subject>, help, save, load, reset, map.', 'system');
-  appendLine('Directions: north, south, east, west, or n/s/e/w. Shorthand: l=look, inv=inventory.', 'system');
-}
-
-function handleExamine(subject) {
-  if (!subject) {
-    appendLine('Examine what?', 'warning');
-    return false;
-  }
-
-  const norm = subject.toLowerCase();
-  const room = rooms[state.currentRoom];
-
-  if (state.currentRoom === 'observationDeck' && (norm === 'beacon' || norm === 'monitor' || norm === 'signal')) {
-    appendLine('The distress beacon pulses with an intermittent signal. You pick up a voice transmission.', 'system');
-    appendLine('"...Deep Drift to any listening... Dr. Chen, medical officer. Reactor critical. Need... need help."', 'info');
-    appendLine('The beacon is still active. Someone is waiting for you.', 'system');
-    return true;
-  }
-
-  if (state.currentRoom === 'crewQuarters' && (norm === 'roster' || norm === 'panel' || norm === 'names')) {
-    appendLine('The wall panel shows the crew manifest. Most entries have been scratched or marked "DECEASED".', 'system');
-    appendLine('Only one name remains: "Dr. Sarah Chen - Medical Officer - Last Known Location: Medical Bay".', 'info');
-    return true;
-  }
-
-  if (state.currentRoom === 'dockingBay' && (norm === 'shuttle' || norm === 'shuttle logs')) {
-    appendLine('The shuttle is pristine but disabled. Its flight computer might have logs...', 'system');
-    if (state.inventory.some((item) => item.toLowerCase() === 'fuel cell')) {
-      appendLine('If only you had power... A fuel cell might work.', 'info');
-    } else {
-      appendLine('You\'ll need a fuel cell to power it up.', 'info');
-    }
-    return true;
-  }
-
-  if (state.currentRoom === 'commandDeck' && (norm === 'console' || norm === 'nav console' || norm === 'display')) {
-    appendLine('The navigation console is dark. Its status display flickers weakly, showing: "REACTOR OFFLINE - CRITICAL ERROR".', 'system');
-    appendLine('It will need the reactor\'s flux core to restart the ship.', 'info');
-    return true;
-  }
-
-  if (state.currentRoom === 'reactorCore' && (norm === 'core' || norm === 'light' || norm === 'chamber')) {
-    appendLine('The reactor core glows with an unstable hum. At its center, a crystalline flux core sits mounted in a harness.', 'system');
-    appendLine('It looks like exactly what the command deck needs.', 'info');
-    return true;
-  }
-
-  appendLine('You see nothing special about that.', 'info');
-  return false;
-}
-
-function handleMap() {
-  appendLine('╔════════════════════════════════════════════════════════╗', 'system');
-  appendLine('║           DEEP DRIFT - VESSEL SCHEMATIC MAP            ║', 'system');
-  appendLine('╚════════════════════════════════════════════════════════╝', 'system');
-  appendLine('', 'system');
-  
-  appendLine('     ┌──────────────────────────────────────────────┐', 'system');
-  appendLine('     │  PRIMARY DECK (Cargo & Command)              │', 'system');
-  appendLine('     └──────────────────────────────────────────────┘', 'system');
-  appendLine('', 'system');
-  
-  appendLine('    [MAINT CORR]   [AIRLOCK]   [DOCKING BAY]   [CMD DECK]   [REACTOR]', 'info');
-  appendLine('           │             │            │              │            │', 'info');
-  appendLine('           └────────────┴──────┬─────┘              └────────────┘', 'info');
-  appendLine('                               │', 'info');
-  appendLine('                        [HABITAT RING]────────[OBSERVATION DECK]', 'info');
-  appendLine('                               │', 'info');
-  appendLine('                        [CREW QUARTERS]', 'info');
-  appendLine('', 'system');
-  
-  appendLine('     ┌──────────────────────────────────────────────┐', 'system');
-  appendLine('     │  ITEMS & OBJECTIVES                         │', 'system');
-  appendLine('     └──────────────────────────────────────────────┘', 'system');
-  appendLine('', 'system');
-  
-  const itemLocations = [
-    { item: 'oxygen key', location: 'Airlock', hint: 'Emergency supplies' },
-    { item: 'fuel cell', location: 'Docking Bay', hint: 'Shuttle power' },
-    { item: 'medkit', location: 'Habitat Ring', hint: 'Crew rescue' },
-    { item: 'repair patch', location: 'Maintenance', hint: 'Life support' },
-    { item: 'flux core', location: 'Reactor Core', hint: '⭐ MISSION CRITICAL' },
-  ];
-  
-  itemLocations.forEach((entry) => {
-    const inInventory = state.inventory.some((item) => 
-      item.toLowerCase() === entry.item.toLowerCase()
-    );
-    const indicator = inInventory ? '✓' : '○';
-    appendLine(`  ${indicator} ${entry.item.padEnd(15)} @ ${entry.location.padEnd(20)} (${entry.hint})`, 'info');
+  const spaceCommands = createSpaceCommands({
+    state,
+    appendLine,
+    renderRoom,
+    statusText,
+    oxygenCapacity,
+    startFlight,
+    craftItem,
+    fuelCapacity,
+    hullCapacity,
+    routeFuelCost,
+    normalizeTravelDestination,
+    upgradeShipSystem,
+    UPGRADE_DEFINITIONS,
+    awardProgress,
   });
-  
-  appendLine('', 'system');
-  appendLine('     ┌──────────────────────────────────────────────┐', 'system');
-  appendLine('     │  MISSION STATUS                              │', 'system');
-  appendLine('     └──────────────────────────────────────────────┘', 'system');
-  appendLine('', 'system');
-  
-  const missionStatus = [
-    { task: 'Recover Flux Core', done: state.inventory.some((item) => item.toLowerCase() === 'flux core') },
-    { task: 'Reach Command Deck', done: state.currentRoom === 'commandDeck' },
-    { task: 'Restore Ship Systems', done: state.gameWon },
-    { task: 'Save Crew (Optional)', done: state.crewSaved },
-    { task: 'Repair Life Support (Optional)', done: state.systemsRepaired },
-  ];
-  
-  missionStatus.forEach((task) => {
-    const check = task.done ? '✓' : '○';
-    const status = task.done ? 'COMPLETE' : 'PENDING';
-    appendLine(`  [${check}] ${task.task.padEnd(28)} ${status}`, task.done ? 'success' : 'system');
+  const phaseOneCommands = createPhaseOneCommands({
+    state,
+    rooms,
+    appendLine,
+    updateMapDisplay,
+    statusText,
+    renderRoom,
+    fuelCapacity,
+    hullCapacity,
+    awardProgress,
+    oxygenCapacity,
+    handleFlight: spaceCommands.handleFlight,
+    handleScan: spaceCommands.handleScan,
   });
-  
-  appendLine('', 'system');
-  appendLine('Use commands: look, examine <subject>, take <item>, use <item>, go <direction>', 'system');
-}
+  const {
+    handleTake,
+    handleDrop,
+    handleSalvage,
+    handleUse,
+    handleMove,
+    handleHelp,
+    handleExamine,
+  } = phaseOneCommands;
+  const {
+    handleFlight,
+    handleShipStatus,
+    handleModules,
+    handleCargo,
+    handleMinerals,
+    handleUpgrades,
+    handleScan,
+    handleTrade,
+    handleMine,
+    handleExplore,
+    handleCraft,
+    handleFlightRoute,
+    handleBoardShip,
+    handleLand,
+  } = spaceCommands;
 
-function parseCommand(rawInput) {
-  const input = rawInput.trim();
-  if (!input) {
-    return;
-  }
+  function parseCommand(rawInput) {
+    const input = rawInput.trim();
+    if (!input) return;
 
-  appendLine(`> ${input}`, 'command');
+    appendLine(`> ${input}`, 'command');
+    const tokens = input.split(/\s+/);
+    const command = tokens[0].toLowerCase();
+    const rest = tokens.slice(1).join(' ');
 
-  const tokens = input.split(/\s+/);
-  const command = tokens[0].toLowerCase();
-  const rest = tokens.slice(1).join(' ');
-  const freeCommands = ['look', 'l', 'inventory', 'inv', 'help', '?', 'map', 'save', 'load', 'reset'];
-  const consumesOxygen = ['take', 'use', 'go', 'move', 'n', 's', 'e', 'w', 'north', 'south', 'east', 'west', 'examine', 'x', 'read'].includes(command);
-  const leakSurcharge = state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired ? 1 : 0;
-  const debrisSurcharge = state.currentRoom === 'observationDeck' && !state.crewSaved ? 1 : 0;
+    const freeCommands = ['look', 'l', 'inventory', 'inv', 'help', '?', 'map', 'save', 'load', 'reset', 'status', 'ship', 'modules'];
+    const isOxygenPurchase = (command === 'trade' && rest.trim().toLowerCase() === 'buy oxygen')
+      || (command === 'use' && ['survival pack', 'survival_pack', 'emergency rations'].includes(rest.trim().toLowerCase()));
+    const isTradeListing = command === 'trade' && ['list', ''].includes(rest.trim().toLowerCase());
+    const isModuleInspection = ['inspect', 'examine'].includes(command) && rest.trim().toLowerCase() === 'modules';
+    const consumesOxygen = !isOxygenPurchase && !isTradeListing && !isModuleInspection && !freeCommands.includes(command) && ['take', 'use', 'go', 'move', 'n', 's', 'e', 'w', 'north', 'south', 'east', 'west', 'examine', 'x', 'read', 'mine', 'explore', 'trade'].includes(command);
+    const leakSurcharge = state.currentRoom === 'maintenanceCorridor' && !state.systemsRepaired ? 1 : 0;
+    const debrisSurcharge = state.currentRoom === 'observationDeck' && !state.crewSaved ? 1 : 0;
 
-  if (state.gameOver && consumesOxygen) {
-    appendLine('Oxygen is depleted. Use "reset" to try again or "load" to restore a save.', 'warning');
-    return;
-  }
+    if (state.gameOver && consumesOxygen) {
+      appendLine('Oxygen is depleted. Use "reset" to try again or "load" to restore a save.', 'warning');
+      return;
+    }
 
-  if (state.gameWon && !freeCommands.includes(command)) {
-    appendLine('The ship is stable and the mission is complete. You can still explore, but the main objective is already won.', 'info');
-    return;
-  }
+    let actionSucceeded = false;
+    switch (command) {
+      case 'look':
+      case 'l':
+        roomDescription();
+        break;
+      case 'inventory':
+      case 'inv':
+        appendLine(`Inventory: ${state.inventory.length ? state.inventory.join(', ') : 'empty'}.`, 'system');
+        break;
+      case 'take':
+        actionSucceeded = handleTake(rest);
+        break;
+      case 'use':
+        actionSucceeded = handleUse(rest);
+        break;
+      case 'go':
+      case 'move':
+        actionSucceeded = handleMove(rest.toLowerCase());
+        break;
+      case 'n':
+      case 's':
+      case 'e':
+      case 'w':
+      case 'north':
+      case 'south':
+      case 'east':
+      case 'west':
+        actionSucceeded = handleMove(command.length === 1 ? { n: 'north', s: 'south', e: 'east', w: 'west' }[command] : command);
+        break;
+      case 'examine':
+      case 'x':
+      case 'read':
+        actionSucceeded = rest.trim().toLowerCase() === 'modules' ? handleModules() : handleExamine(rest);
+        break;
+      case 'help':
+      case '?':
+        handleHelp();
+        break;
+      case 'save':
+        localStorage.setItem('deep-drift-save', JSON.stringify({
+          currentRoom: state.currentRoom,
+          inventory: state.inventory,
+          visited: [...state.visited],
+          oxygenTurns: state.oxygenTurns,
+          gameWon: state.gameWon,
+          gameOver: state.gameOver,
+          crewSaved: state.crewSaved,
+          systemsRepaired: state.systemsRepaired,
+          ship: state.ship,
+          phase2: state.phase2,
+          progression: state.progression,
+          roomItems: Object.fromEntries(Object.entries(rooms).map(([roomId, room]) => [roomId, room.items])),
+        }));
+        appendLine('Progress saved.', 'system');
+        break;
+      case 'load':
+        try {
+          const saved = JSON.parse(localStorage.getItem('deep-drift-save') || '{}');
+          state.currentRoom = saved.currentRoom || 'airlock';
+          state.inventory = saved.inventory || [];
+          state.visited = new Set(saved.visited || ['airlock']);
+          state.oxygenTurns = saved.oxygenTurns ?? MAX_OXYGEN_TURNS;
+          state.gameWon = Boolean(saved.gameWon);
+          state.gameOver = Boolean(saved.gameOver);
+          state.crewSaved = Boolean(saved.crewSaved);
+          state.systemsRepaired = Boolean(saved.systemsRepaired);
+          state.ship = saved.ship || state.ship;
+          state.phase2 = saved.phase2 || state.phase2;
+          state.progression = saved.progression || createProgressionState();
+          state.destinations = state.phase2.destinations || state.destinations;
+          const currentDestinationId = state.phase2.currentDestination && state.phase2.currentDestination.id;
+          state.phase2.currentDestination = state.destinations.find((destination) => destination.id === currentDestinationId) || null;
+          Object.entries(rooms).forEach(([roomId, room]) => {
+            const savedItems = saved.roomItems && saved.roomItems[roomId];
+            room.items = Array.isArray(savedItems)
+              ? [...savedItems]
+              : initialRoomItems[roomId].filter((item) => !state.inventory.some((ownedItem) => ownedItem.toLowerCase() === item.toLowerCase()));
+          });
+          appendLine('Saved progress restored.', 'system');
+          renderRoom();
+        } catch (error) {
+          appendLine('Could not load saved game.', 'warning');
+        }
+        break;
+      case 'reset':
+        state.currentRoom = 'airlock';
+        Object.entries(rooms).forEach(([roomId, room]) => {
+          room.items = [...initialRoomItems[roomId]];
+        });
+        state.inventory = [];
+        state.visited = new Set(['airlock']);
+        state.oxygenTurns = MAX_OXYGEN_TURNS;
+        state.gameWon = false;
+        state.gameOver = false;
+        state.crewSaved = false;
+        state.systemsRepaired = false;
+        const freshPhase2State = createPhase2State();
+        state.ship = freshPhase2State.ship;
+        state.phase2 = freshPhase2State.phase2;
+        state.progression = createProgressionState();
+        state.destinations = freshPhase2State.destinations;
+        appendLine('A fresh mission begins.', 'system');
+        renderRoom();
+        break;
+      case 'map':
+        handleMap();
+        break;
+      case 'flight':
+      case 'destinations':
+        actionSucceeded = handleFlight();
+        break;
+      case 'status':
+      case 'ship':
+        handleShipStatus();
+        break;
+      case 'modules':
+        handleModules();
+        break;
+      case 'inspect':
+        actionSucceeded = rest.trim().toLowerCase() === 'modules' ? handleModules() : handleExamine(rest);
+        break;
+      case 'progress':
+      case 'rank':
+        appendLine(`Frontier status: ${state.progression.rank} | Reputation: ${state.progression.reputation} | Routes completed: ${state.progression.routesCompleted}`, 'system');
+        break;
+      case 'craft':
+        actionSucceeded = handleCraft(rest);
+        break;
+      case 'mine':
+        actionSucceeded = handleMine();
+        break;
+      case 'explore':
+        actionSucceeded = handleExplore();
+        break;
+      case 'trade':
+        actionSucceeded = handleTrade(rest);
+        break;
+      case 'travel':
+        actionSucceeded = handleFlightRoute(rest);
+        break;
+      case 'board':
+      case 'return':
+        actionSucceeded = handleBoardShip();
+        break;
+      case 'land':
+      case 'disembark':
+        actionSucceeded = handleLand();
+        break;
+      case 'cargo':
+        actionSucceeded = handleCargo();
+        break;
+      case 'minerals':
+        actionSucceeded = handleMinerals();
+        break;
+      case 'scan':
+      case 'survey':
+        actionSucceeded = handleScan();
+        break;
+      case 'upgrade':
+      case 'upgrades':
+        actionSucceeded = handleUpgrades(rest);
+        break;
+      case 'drop':
+        actionSucceeded = handleDrop(rest);
+        break;
+      case 'salvage':
+        actionSucceeded = handleSalvage(rest);
+        break;
+      default:
+        if (/^travel\s+to\b/i.test(input)) {
+          actionSucceeded = handleFlightRoute(input.replace(/^travel\s+to\s+/i, ''));
+        } else {
+          appendLine(`Unknown command: ${input}. Type "help" for a list of actions.`, 'warning');
+        }
+    }
 
-  let actionSucceeded = false;
-
-  switch (command) {
-    case 'look':
-    case 'l':
-      handleLook();
-      break;
-    case 'inventory':
-    case 'inv':
-      handleInventory();
-      break;
-    case 'take':
-      actionSucceeded = handleTake(rest);
-      break;
-    case 'use':
-      actionSucceeded = handleUse(rest);
-      break;
-    case 'go':
-    case 'move':
-      actionSucceeded = handleMove(getDirectionAlias(rest.toLowerCase()));
-      break;
-    case 'n':
-    case 's':
-    case 'e':
-    case 'w':
-    case 'north':
-    case 'south':
-    case 'east':
-    case 'west':
-      actionSucceeded = handleMove(getDirectionAlias(command));
-      break;
-    case 'examine':
-    case 'x':
-    case 'read':
-      actionSucceeded = handleExamine(rest);
-      break;
-    case 'help':
-    case '?':
-      handleHelp();
-      break;
-    case 'save':
-      saveGame();
-      break;
-    case 'load':
-      loadGame();
-      break;
-    case 'reset':
-      resetGame();
-      break;
-    case 'map':
-      handleMap();
-      break;
-    default:
-      appendLine(`Unknown command: ${input}. Type "help" for a list of actions.`, 'warning');
-  }
-
-  if (consumesOxygen && actionSucceeded) {
-    const oxygenCost = 1 + leakSurcharge + debrisSurcharge;
-    state.oxygenTurns = Math.max(0, state.oxygenTurns - oxygenCost);
-    statusText();
-    appendLine(`Oxygen spent: ${oxygenCost}. Reserve: ${state.oxygenTurns}/${oxygenCapacity()}.`, state.oxygenTurns <= 3 ? 'warning' : 'system');
-    if (state.oxygenTurns === 0 && !state.gameWon) {
-      state.gameOver = true;
+    if (consumesOxygen && actionSucceeded) {
+      const oxygenCost = 1 + leakSurcharge + debrisSurcharge;
+      state.oxygenTurns = Math.max(0, state.oxygenTurns - oxygenCost);
       statusText();
-      appendLine('Oxygen depleted. The mission has failed. Use "reset" to try again or "load" to restore a save.', 'warning');
+      appendLine(`Oxygen spent: ${oxygenCost}. Reserve: ${state.oxygenTurns}/${oxygenCapacity()}.`, state.oxygenTurns <= 3 ? 'warning' : 'system');
+      if (state.oxygenTurns === 0 && !state.gameWon) {
+        state.gameOver = true;
+        statusText();
+        appendLine(`Oxygen depleted. Actions are paused; the reserve restores 1 action every ${OXYGEN_RECHARGE_INTERVAL_MS / 1000} seconds.`, 'warning');
+      }
     }
-  } else if (consumesOxygen) {
-    appendLine('No oxygen spent; the action did not succeed.', 'info');
+
+    updateRoomActions();
   }
 
-  updateRoomActions();
-}
+  function startGame() {
+    document.body.classList.add('game-started');
+    if (introScreen) introScreen.hidden = true;
+    if (gameShell) {
+      gameShell.hidden = false;
+      gameShell.style.display = 'block';
+    }
+    if (inputEl) inputEl.focus();
+  }
 
-function init() {
+  if (startGameBtn) startGameBtn.addEventListener('click', startGame);
+  if (phase2LaunchBtn) phase2LaunchBtn.addEventListener('click', () => parseCommand('flight'));
+  if (introScreen) introScreen.hidden = false;
+  if (gameShell) {
+    gameShell.hidden = true;
+    gameShell.style.display = 'none';
+  }
+
+  if (mapPanelEl) mapPanelEl.open = !mapPanelUsesMobileLayout;
+  window.addEventListener('resize', syncMapPanelToViewport);
+  if (mobileLayoutQuery && typeof mobileLayoutQuery.addEventListener === 'function') {
+    mobileLayoutQuery.addEventListener('change', syncMapPanelToViewport);
+  }
+
+  setInterval(() => {
+    const wasGameOver = state.gameOver;
+    if (!rechargeOxygen(state)) return;
+    statusText();
+    if (wasGameOver && !state.gameOver) {
+      appendLine('Emergency oxygen restored. You can continue.', 'success');
+    }
+    updateRoomActions();
+  }, OXYGEN_RECHARGE_INTERVAL_MS);
+
+  initStarfield();
   appendLine('Deep Drift online. Welcome aboard the research vessel.', 'system');
   appendLine('Your mission: restore the ship and return to stable orbit.', 'system');
-  appendLine(`Oxygen reserve: ${MAX_OXYGEN_TURNS} actions. Movement and interactions consume oxygen; look, inventory, help, map, save, and load are free.`, 'warning');
+  appendLine(`Oxygen reserve: ${MAX_OXYGEN_TURNS} actions. It recharges by 1 every ${OXYGEN_RECHARGE_INTERVAL_MS / 1000} seconds, up to your capacity.`, 'warning');
   appendLine('Start by taking the oxygen key, then head north toward the Docking Bay. Type "help" for more commands.', 'system');
   renderRoom();
-  renderSvgMap();
-  updateMapDisplay();
+
+  formEl.addEventListener('submit', (event) => {
+    event.preventDefault();
+    parseCommand(inputEl.value);
+    inputEl.value = '';
+    inputEl.focus();
+  });
 }
 
-formEl.addEventListener('submit', (event) => {
-  event.preventDefault();
-  parseCommand(inputEl.value);
-  inputEl.value = '';
-  inputEl.focus();
-});
-
-init();
+if (typeof module !== 'undefined') {
+  module.exports = {
+    generateGalaxy,
+    createPhase2State,
+    startFlight,
+    resolveTravel,
+    craftItem,
+    normalizeTravelDestination,
+    rooms,
+  };
+}
